@@ -1,6 +1,5 @@
 from core.models.candle import Candle
-from core.models.signal import SignalSide, TradingSignal
-
+from core.models.signal import TradingSignal, SignalSide, EntryTiming
 from indicators.hilo_activator import (
     HiLoTrend,
     calculate_hilo_activator,
@@ -115,6 +114,7 @@ class HiLoMACDStrategy:
             strategy=self.name,
             side=SignalSide.LONG,
             candle_index=index,
+            entry_timing=EntryTiming.NEXT_OPEN,
             trigger_price=candles[index].close,
             stop_loss=current_hilo.line,
             reason=(
@@ -123,6 +123,7 @@ class HiLoMACDStrategy:
                 "bearish Hi-Lo Activator line. "
                 "Entry scheduled for next candle open."
             ),
+
         )
 
     def should_exit_long(
