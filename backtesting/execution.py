@@ -1,6 +1,4 @@
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Optional
 
 from backtesting.broker import BacktestBroker
 from core.enums.position import PositionSide
@@ -16,6 +14,7 @@ class PendingEntry:
 
 
 class BacktestExecution:
+
     def __init__(
         self,
         broker: BacktestBroker,
@@ -25,11 +24,13 @@ class BacktestExecution:
         self.risk_manager = risk_manager
 
     def can_enter(self, symbol: str) -> bool:
-        return not self.broker.has_open_trade()
+        return not self.broker.has_open_trade(symbol)
 
     def sync_account(self) -> None:
         self.risk_manager.account.balance = self.broker.balance
-        self.risk_manager.account.available_balance = self.broker.balance
+        self.risk_manager.account.available_balance = (
+            self.broker.balance
+        )
 
     def create_pending_entry(
         self,
@@ -37,21 +38,23 @@ class BacktestExecution:
         symbol: str,
         timeframe: str,
     ) -> PendingEntry:
+
         return PendingEntry(
             signal=signal,
             symbol=symbol,
             timeframe=timeframe,
         )
 
-    def execute_next_open(
+    def execute_entry(
         self,
         pending: PendingEntry,
-        candle,
+        entry_price: float,
+        timestamp,
     ):
-        self.sync_account()
-        signal = pending.signal
 
-        entry_price = candle.open
+        self.sync_account()
+
+        signal = pending.signal
 
         decision = self.risk_manager.evaluate(
             signal=signal,
@@ -59,13 +62,18 @@ class BacktestExecution:
         )
 
         if not decision.approved:
+
             print()
             print("===== TRADE REJECTED =====")
             print(f"Strategy: {signal.strategy}")
             print(f"Reason: {decision.reason}")
+
             return None
 
-        position_size = decision.position_size.position_size
+        position_size = (
+            decision.position_size.position_size
+        )
+
         risk_reward = decision.risk_reward
 
         if signal.side.value == "long":
@@ -73,7 +81,11 @@ class BacktestExecution:
         else:
             side = PositionSide.SHORT
 
-        take_profit = risk_reward.take_profit
+        # Strategy-specific TP takes priority.
+        if signal.take_profit is not None:
+            take_profit = signal.take_profit
+        else:
+            take_profit = risk_reward.take_profit
 
         trade = self.broker.open_trade(
             symbol=pending.symbol,
@@ -83,7 +95,44 @@ class BacktestExecution:
             stop_loss=signal.stop_loss,
             take_profit=take_profit,
             strategy=signal.strategy,
-            timestamp=candle.timestamp,
+            timestamp=timestamp,
         )
 
         return trade
+
+    def execute_next_open(
+        self,
+        pending: PendingEntry,
+        candle,
+    ):
+
+        return self.execute_entry(
+            pending=pending,
+            entry_price=candle.open,
+            timestamp=candle.timestamp,
+        )
+
+    def execute_current_close(
+        self,
+        pending: PendingEntry,
+        candle,
+    ):
+
+        return self.execute_entry(
+            pending=pending,
+            entry_price=candle.close,
+            timestamp=candle.timestamp,
+        )
+
+    def execute_breakout(
+        self,
+        pending: PendingEntry,
+        entry_price: float,
+        timestamp,
+    ):
+
+        return self.execute_entry(
+            pending=pending,
+            entry_price=entry_price,
+            timestamp=timestamp,
+        )
