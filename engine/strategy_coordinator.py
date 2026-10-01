@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-
 from core.models.candle import Candle
 from core.models.signal import TradingSignal
 
@@ -11,6 +10,7 @@ class StrategyEvaluation:
 
 
 class StrategyCoordinator:
+
     def __init__(
         self,
         strategies_15m: list,
@@ -19,51 +19,40 @@ class StrategyCoordinator:
         self.strategies_15m = strategies_15m
         self.strategies_5m = strategies_5m
 
-    def evaluate(
+    def evaluate_15m(
         self,
-        candles_15m: list[Candle],
-        candles_5m: list[Candle],
+        candles: list[Candle],
     ) -> StrategyEvaluation:
-
-        # -------------------------------------------------
-        # 15m has priority
-        # -------------------------------------------------
 
         signal = self._evaluate_strategies(
             strategies=self.strategies_15m,
-            candles=candles_15m,
+            candles=candles,
         )
 
-        if signal is not None:
-            return StrategyEvaluation(
-                timeframe="15m",
-                signal=signal,
-            )
+        return StrategyEvaluation(
+            timeframe="15m",
+            signal=signal,
+        )
 
-        # -------------------------------------------------
-        # Only check 5m when 15m has no signal
-        # -------------------------------------------------
+    def evaluate_5m(
+        self,
+        candles: list[Candle],
+    ) -> StrategyEvaluation:
 
         signal = self._evaluate_strategies(
             strategies=self.strategies_5m,
-            candles=candles_5m,
+            candles=candles,
         )
 
-        if signal is not None:
-            return StrategyEvaluation(
-                timeframe="5m",
-                signal=signal,
-            )
-
         return StrategyEvaluation(
-            timeframe="none",
-            signal=None,
+            timeframe="5m",
+            signal=signal,
         )
 
     @staticmethod
     def _evaluate_strategies(
-            strategies: list,
-            candles: list[Candle],
+        strategies: list,
+        candles: list[Candle],
     ) -> TradingSignal | None:
 
         if not candles:
@@ -82,4 +71,3 @@ class StrategyCoordinator:
                 return signal
 
         return None
-
