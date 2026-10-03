@@ -8,13 +8,6 @@ from indicators.bollinger_bands import calculate_bollinger_bands
 from strategies.bollinger.config import BollingerConfig
 
 
-# The guide (section 4.1, Step 3) enters immediately on the close of
-# candle (t). If your EntryTiming enum has a CLOSE member it is used;
-# otherwise this falls back to BREAKOUT with trigger_price = close.
-# Replace with the exact member name from core/models/signal.py.
-IMMEDIATE_ENTRY = getattr(EntryTiming, "CLOSE", EntryTiming.BREAKOUT)
-
-
 class FFFDStrategy:
     """
     Fechou Fora - Fechou Dentro (Closed Outside - Closed Inside)
@@ -42,6 +35,10 @@ class FFFDStrategy:
     Macro filters (SMA 200, volume vs. volume MA) and the 1:3
     risk-reward check are applied by the Signal Resolver / Risk
     Manager, not by this class.
+
+    A signal is skipped when candle (t) already closed beyond the
+    middle band, because the Step 5 target would then be behind the
+    entry price.
     """
 
     name = "fffd"
@@ -102,7 +99,12 @@ class FFFDStrategy:
             current.close >= current_band.lower
         )
 
-        if outside_lower and closed_inside_lower:
+        # The middle-band target must still be ahead of the entry.
+        if (
+            outside_lower
+            and closed_inside_lower
+            and current.close < current_band.middle
+        ):
 
             stop_loss = (
                 min(previous.low, current.low)
@@ -113,7 +115,7 @@ class FFFDStrategy:
                 strategy=self.name,
                 side=SignalSide.LONG,
                 candle_index=index,
-                entry_timing=IMMEDIATE_ENTRY,
+                entry_timing=EntryTiming.CURRENT_CLOSE,
                 trigger_price=current.close,
                 stop_loss=stop_loss,
                 take_profit=current_band.middle,
@@ -137,7 +139,12 @@ class FFFDStrategy:
             current.close <= current_band.upper
         )
 
-        if outside_upper and closed_inside_upper:
+        # The middle-band target must still be ahead of the entry.
+        if (
+            outside_upper
+            and closed_inside_upper
+            and current.close > current_band.middle
+        ):
 
             stop_loss = (
                 max(previous.high, current.high)
@@ -148,7 +155,7 @@ class FFFDStrategy:
                 strategy=self.name,
                 side=SignalSide.SHORT,
                 candle_index=index,
-                entry_timing=IMMEDIATE_ENTRY,
+                entry_timing=EntryTiming.CURRENT_CLOSE,
                 trigger_price=current.close,
                 stop_loss=stop_loss,
                 take_profit=current_band.middle,
