@@ -70,7 +70,7 @@ def create_strategy_coordinator() -> StrategyCoordinator:
         FFFDStrategy(),
         BollingerSqueezeStrategy(),
         ChannelReboundStrategy(),
-        NR7Strategy(),
+        #NR7Strategy(),
         WilliamsRStrategy(),
         Setup1234Strategy(),
     ]
@@ -88,7 +88,7 @@ def create_strategy_coordinator() -> StrategyCoordinator:
         FFFDStrategy(),
         BollingerSqueezeStrategy(),
         ChannelReboundStrategy(),
-        NR7Strategy(),
+        # NR7Strategy(),
         WilliamsRStrategy(),
         Setup1234Strategy(),
     ]

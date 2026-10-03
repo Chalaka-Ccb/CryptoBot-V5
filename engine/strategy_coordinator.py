@@ -1,4 +1,7 @@
+
+
 from dataclasses import dataclass
+
 from core.models.candle import Candle
 from core.models.signal import TradingSignal
 
@@ -19,34 +22,45 @@ class StrategyCoordinator:
         self.strategies_15m = strategies_15m
         self.strategies_5m = strategies_5m
 
-    def evaluate_15m(
+    def evaluate(
         self,
-        candles: list[Candle],
+        candles_15m: list[Candle],
+        candles_5m: list[Candle],
     ) -> StrategyEvaluation:
+
+        # -------------------------------------------------
+        # 15m has priority
+        # -------------------------------------------------
 
         signal = self._evaluate_strategies(
             strategies=self.strategies_15m,
-            candles=candles,
+            candles=candles_15m,
         )
 
-        return StrategyEvaluation(
-            timeframe="15m",
-            signal=signal,
-        )
+        if signal is not None:
+            return StrategyEvaluation(
+                timeframe="15m",
+                signal=signal,
+            )
 
-    def evaluate_5m(
-        self,
-        candles: list[Candle],
-    ) -> StrategyEvaluation:
+        # -------------------------------------------------
+        # Only check 5m when 15m has no signal
+        # -------------------------------------------------
 
         signal = self._evaluate_strategies(
             strategies=self.strategies_5m,
-            candles=candles,
+            candles=candles_5m,
         )
 
+        if signal is not None:
+            return StrategyEvaluation(
+                timeframe="5m",
+                signal=signal,
+            )
+
         return StrategyEvaluation(
-            timeframe="5m",
-            signal=signal,
+            timeframe="none",
+            signal=None,
         )
 
     @staticmethod

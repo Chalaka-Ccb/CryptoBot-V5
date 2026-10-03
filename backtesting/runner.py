@@ -169,7 +169,10 @@ class BacktestRunner:
                             f"Trade entered at {trade.entry_price} "
                             f"on {trade.entry_time}"
                         )
-            closed_trade = broker.process_candle(candle)
+            closed_trade = broker.process_candle(
+                symbol=market_data.symbol,
+                candle=candle,
+            )
 
             if closed_trade is not None:
                 completed_trades.append(closed_trade)

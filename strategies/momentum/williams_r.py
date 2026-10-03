@@ -1,12 +1,16 @@
 from core.models.candle import Candle
-from core.models.signal import SignalSide, TradingSignal
+#from core.models.signal import SignalSide, TradingSignal
 
 from indicators.williams_r import calculate_williams_r
 
 from strategies.momentum.config import (
     WilliamsRStrategyConfig,
 )
-
+from core.models.signal import (
+    TradingSignal,
+    SignalSide,
+    EntryTiming,
+)
 
 class WilliamsRStrategy:
     """
@@ -76,6 +80,7 @@ class WilliamsRStrategy:
         if self.config.enter_at_close:
 
             trigger_price = current.close
+            entry_timing = EntryTiming.CURRENT_CLOSE
 
         else:
 
@@ -83,6 +88,7 @@ class WilliamsRStrategy:
                 current.high
                 + self.config.trigger_offset
             )
+            entry_timing = EntryTiming.BREAKOUT
 
         # -----------------------------------
         # Stop Loss
@@ -103,6 +109,7 @@ class WilliamsRStrategy:
             strategy=self.name,
             side=SignalSide.LONG,
             candle_index=index,
+            entry_timing=entry_timing,
             trigger_price=trigger_price,
             stop_loss=stop_loss,
             reason=(
