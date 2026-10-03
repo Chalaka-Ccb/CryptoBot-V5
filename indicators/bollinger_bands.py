@@ -31,6 +31,9 @@ def calculate_bollinger_bands(
     Lower Band:
         SMA - std_multiplier * standard deviation
 
+    Standard deviation is the population standard deviation (divides
+    by N), matching the reference guide.
+
     Bandwidth:
         (Upper - Lower) / Middle
     """
