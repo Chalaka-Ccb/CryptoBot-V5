@@ -383,13 +383,13 @@ class WilliamsRStrategy:
         # Overbought -> cross back below -20 (short)
         # -----------------------------------
 
-        if (
-            self.config.enable_short
-            and self._crossed_out_of_overbought(
-                previous_value,
-                current_value,
-            )
-        ):
+        # if (
+        #     self.config.enable_short
+        #     and self._crossed_out_of_overbought(
+        #         previous_value,
+        #         current_value,
+        #     )
+        # ):
 
             trigger_price, entry_timing = self._entry(
                 current,
