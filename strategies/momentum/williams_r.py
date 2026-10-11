@@ -5,6 +5,7 @@ from core.models.signal import (
     EntryTiming,
 )
 from indicators.ema import calculate_ema
+from indicators.volume_spike import calculate_volume_spike
 from indicators.williams_r import calculate_williams_r
 
 from strategies.momentum.config import (
@@ -20,6 +21,7 @@ class WilliamsRStrategy:
     Long condition:
         (%R[t-1] < oversold) AND (%R[t] > oversold)
         AND (close[t] > EMA200[t])
+        AND (volume[t] >= 1.2 * volume SMA(20)[t])
 
     Zones (%R is bounded between 0 and -100):
         Overbought: -20 to 0
@@ -137,24 +139,37 @@ class WilliamsRStrategy:
         if index < 1 or index >= len(candles):
             return None
 
-        # EMA 200 trend confirmation.
-        # candles[:index + 1] guarantees no access to future candles.
-        ema_200 = calculate_ema(
-            candles[:index + 1],
+        # Only historical candles available at this index.
+        historical_candles = candles[:index + 1]
+
+        current = candles[index]
+
+        # -----------------------------------
+        # 1. EMA 200 trend filter
+        # -----------------------------------
+
+        ema_values = calculate_ema(
+            historical_candles,
             period=200,
         )
 
-        current_ema = ema_200[index]
+        current_ema = ema_values[index]
 
-        # Not enough candles for EMA 200
         if current_ema is None:
             return None
 
-        # LONG trades only in bullish conditions
-        if candles[index].close <= current_ema:
+        # LONG trades only above EMA 200.
+        if current.close <= current_ema:
             return None
 
-        williams_r = self._get_williams_r(candles)
+        # -----------------------------------
+        # 2. Williams %R recovery
+        # -----------------------------------
+
+        williams_r = calculate_williams_r(
+            historical_candles,
+            period=self.config.period,
+        )
 
         previous_value = williams_r[index - 1]
         current_value = williams_r[index]
@@ -165,30 +180,38 @@ class WilliamsRStrategy:
         ):
             return None
 
-        current = candles[index]
-
-        # -----------------------------------
-        # Oversold -> cross back above -80 (long)
-        # -----------------------------------
-
         if not self._crossed_out_of_oversold(
             previous_value,
             current_value,
         ):
             return None
 
+        # -----------------------------------
+        # 3. Volume confirmation
+        # -----------------------------------
+
+        volume_result = calculate_volume_spike(
+            candles=historical_candles,
+            index=index,
+            period=20,
+            minimum_ratio=1.2,
+        )
+
+        if not volume_result.confirmed:
+            return None
+
+        # -----------------------------------
+        # 4. LONG entry
+        # -----------------------------------
+
         trigger_price, entry_timing = self._entry(current)
 
-        # The signal candle is not necessarily the complete
-        # oversold dip, so use the lowest low of the whole
-        # oversold sequence.
         stop_loss = self._find_oversold_low(
-            candles,
+            historical_candles,
             williams_r,
             index,
         )
 
-        # Guard against zero / negative risk distance.
         if stop_loss >= trigger_price:
             return None
 
@@ -200,9 +223,11 @@ class WilliamsRStrategy:
             trigger_price=trigger_price,
             stop_loss=stop_loss,
             reason=(
-                "Williams %R crossed back above "
-                f"{self.config.oversold} after "
-                "being oversold."
+                "Williams %R recovered above "
+                f"{self.config.oversold}; "
+                "price above EMA 200; "
+                f"volume ratio {volume_result.volume_ratio:.2f} "
+                "confirmed >= 1.2."
             ),
         )
 
@@ -300,3 +325,6 @@ class WilliamsRStrategy:
             previous_value,
             current_value,
         )
+
+
+
