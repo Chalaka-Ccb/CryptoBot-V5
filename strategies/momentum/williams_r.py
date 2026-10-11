@@ -1,6 +1,11 @@
 from core.models.candle import Candle
-from core.models.signal import SignalSide, TradingSignal
-
+from core.models.signal import (
+    TradingSignal,
+    SignalSide,
+    EntryTiming,
+)
+from indicators.ema import calculate_ema
+from indicators.volume_spike import calculate_volume_spike
 from indicators.williams_r import calculate_williams_r
 
 from strategies.momentum.config import (
@@ -10,15 +15,44 @@ from strategies.momentum.config import (
 
 class WilliamsRStrategy:
     """
-    Larry Williams %R oversold recovery strategy.
+    Larry Williams %R strategy (guide section 5.2) - LONG ONLY,
+    filtered by EMA 200.
 
-    Long setup:
+    Long condition:
+        (%R[t-1] < oversold) AND (%R[t] > oversold)
+        AND (close[t] > EMA200[t])
+        AND (volume[t] >= 1.2 * volume SMA(20)[t])
 
-        Previous %R <= oversold
-        Current %R > oversold
+    Zones (%R is bounded between 0 and -100):
+        Overbought: -20 to 0
+        Oversold:   -80 to -100
 
-    This represents %R crossing back upward
-    out of the oversold zone.
+    Buy trigger (long):
+        %R enters the oversold zone (< oversold) and crosses back
+        above it:
+
+            previous %R < oversold  AND  current %R > oversold
+
+    Sell trigger (exit only):
+        %R enters the overbought zone (> overbought) and crosses
+        back below it:
+
+            previous %R > overbought  AND  current %R < overbought
+
+        - Closes an open long (`should_exit_long`).
+        - No short signals are generated.
+
+    Entry:
+        At the close of the signal candle (`enter_at_close=True`) or
+        as a breakout of the signal candle high plus
+        `trigger_offset`.
+
+    Stop loss (strategy-own, the guide gives none for %R):
+        Long: lowest low of the oversold sequence plus the signal
+              candle.
+
+    No take profit is set; the engine applies the guide's default
+    target (1:3 risk-reward).
     """
 
     name = "williams_r"
@@ -31,6 +65,70 @@ class WilliamsRStrategy:
             config
             or WilliamsRStrategyConfig()
         )
+        self._cache_key: tuple[int, int] | None = None
+        self._williams_r: list[float | None] = []
+
+    # -----------------------------------
+    # Helpers
+    # -----------------------------------
+
+    def _get_williams_r(
+        self,
+        candles: list[Candle],
+    ) -> list[float | None]:
+        """
+        Compute %R once per candle list instead of on every call.
+        Rebuilt when the list object or its length changes (live
+        data appending candles).
+        """
+
+        key = (id(candles), len(candles))
+
+        if key != self._cache_key:
+            self._williams_r = calculate_williams_r(
+                candles,
+                period=self.config.period,
+            )
+            self._cache_key = key
+
+        return self._williams_r
+
+    def _crossed_out_of_oversold(
+        self,
+        previous_value: float,
+        current_value: float,
+    ) -> bool:
+        return (
+            previous_value < self.config.oversold
+            and current_value > self.config.oversold
+        )
+
+    def _crossed_out_of_overbought(
+        self,
+        previous_value: float,
+        current_value: float,
+    ) -> bool:
+        return (
+            previous_value > self.config.overbought
+            and current_value < self.config.overbought
+        )
+
+    def _entry(
+        self,
+        current: Candle,
+    ) -> tuple[float, EntryTiming]:
+
+        if self.config.enter_at_close:
+            return current.close, EntryTiming.CURRENT_CLOSE
+
+        return (
+            current.high + self.config.trigger_offset,
+            EntryTiming.BREAKOUT,
+        )
+
+    # -----------------------------------
+    # Signal generation
+    # -----------------------------------
 
     def generate_signal(
         self,
@@ -38,11 +136,38 @@ class WilliamsRStrategy:
         index: int,
     ) -> TradingSignal | None:
 
-        if index < 1:
+        if index < 1 or index >= len(candles):
             return None
 
+        # Only historical candles available at this index.
+        historical_candles = candles[:index + 1]
+
+        current = candles[index]
+
+        # -----------------------------------
+        # 1. EMA 200 trend filter
+        # -----------------------------------
+
+        ema_values = calculate_ema(
+            historical_candles,
+            period=200,
+        )
+
+        current_ema = ema_values[index]
+
+        if current_ema is None:
+            return None
+
+        # LONG trades only above EMA 200.
+        if current.close <= current_ema:
+            return None
+
+        # -----------------------------------
+        # 2. Williams %R recovery
+        # -----------------------------------
+
         williams_r = calculate_williams_r(
-            candles,
+            historical_candles,
             period=self.config.period,
         )
 
@@ -55,60 +180,54 @@ class WilliamsRStrategy:
         ):
             return None
 
-        # -----------------------------------
-        # Oversold → cross back above -80
-        # -----------------------------------
-
-        crossed_out_of_oversold = (
-            previous_value <= self.config.oversold
-            and current_value > self.config.oversold
-        )
-
-        if not crossed_out_of_oversold:
+        if not self._crossed_out_of_oversold(
+            previous_value,
+            current_value,
+        ):
             return None
 
-        current = candles[index]
-
         # -----------------------------------
-        # Entry
+        # 3. Volume confirmation
         # -----------------------------------
 
-        if self.config.enter_at_close:
+        volume_result = calculate_volume_spike(
+            candles=historical_candles,
+            index=index,
+            period=20,
+            minimum_ratio=1.2,
+        )
 
-            trigger_price = current.close
-
-        else:
-
-            trigger_price = (
-                current.high
-                + self.config.trigger_offset
-            )
+        if not volume_result.confirmed:
+            return None
 
         # -----------------------------------
-        # Stop Loss
+        # 4. LONG entry
         # -----------------------------------
-        #
-        # The basic signal candle is not
-        # necessarily the complete oversold
-        # dip, so we determine the lowest low
-        # from the oversold sequence.
+
+        trigger_price, entry_timing = self._entry(current)
 
         stop_loss = self._find_oversold_low(
-            candles,
+            historical_candles,
             williams_r,
             index,
         )
+
+        if stop_loss >= trigger_price:
+            return None
 
         return TradingSignal(
             strategy=self.name,
             side=SignalSide.LONG,
             candle_index=index,
+            entry_timing=entry_timing,
             trigger_price=trigger_price,
             stop_loss=stop_loss,
             reason=(
-                "Williams %R crossed back above "
-                f"{self.config.oversold} after "
-                "being oversold."
+                "Williams %R recovered above "
+                f"{self.config.oversold}; "
+                "price above EMA 200; "
+                f"volume ratio {volume_result.volume_ratio:.2f} "
+                "confirmed >= 1.2."
             ),
         )
 
@@ -130,7 +249,7 @@ class WilliamsRStrategy:
             if value is None:
                 break
 
-            if value <= self.config.oversold:
+            if value < self.config.oversold:
 
                 lowest_low = min(
                     lowest_low,
@@ -144,32 +263,68 @@ class WilliamsRStrategy:
 
         return lowest_low
 
-    def should_exit_long(
-            self,
-            candles: list[Candle],
-            index: int,
-    ) -> bool:
+    # -----------------------------------
+    # Exits
+    # -----------------------------------
 
-        if index < 1:
+    def should_exit_long(
+        self,
+        candles: list[Candle],
+        index: int,
+    ) -> bool:
+        """
+        Guide sell trigger: %R was overbought and has crossed back
+        below the overbought level.
+        """
+
+        if index < 1 or index >= len(candles):
             return False
 
-        williams_r = calculate_williams_r(
-            candles,
-            period=self.config.period,
-        )
+        williams_r = self._get_williams_r(candles)
 
         previous_value = williams_r[index - 1]
         current_value = williams_r[index]
 
         if (
-                previous_value is None
-                or current_value is None
+            previous_value is None
+            or current_value is None
         ):
             return False
 
-        # %R has reached overbought territory
-        # and is now turning downward.
-        return (
-                previous_value > self.config.overbought
-                and current_value < previous_value
+        return self._crossed_out_of_overbought(
+            previous_value,
+            current_value,
         )
+
+    def should_exit_short(
+        self,
+        candles: list[Candle],
+        index: int,
+    ) -> bool:
+        """
+        Mirror of the long exit: %R was oversold and has crossed
+        back above the oversold level. Kept for engine interface
+        compatibility; never used since no shorts are opened.
+        """
+
+        if index < 1 or index >= len(candles):
+            return False
+
+        williams_r = self._get_williams_r(candles)
+
+        previous_value = williams_r[index - 1]
+        current_value = williams_r[index]
+
+        if (
+            previous_value is None
+            or current_value is None
+        ):
+            return False
+
+        return self._crossed_out_of_oversold(
+            previous_value,
+            current_value,
+        )
+
+
+

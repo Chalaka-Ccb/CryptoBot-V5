@@ -14,7 +14,7 @@ def main():
 
     market_data = loader.load_market_data(
         symbol="BTC/USDT:USDT",
-        candles=100,
+        candles=1000,
     )
 
     coordinator = create_strategy_coordinator()
@@ -22,6 +22,10 @@ def main():
     runner = BacktestRunner(
         strategy_coordinator=coordinator,
         initial_balance=10_000.0,
+        risk_percentage=0.02,
+        default_risk_reward=3.0,
+        default_stop_percentage=0.01,
+        breakout_expiry_candles=3,
     )
 
     result = runner.run(
@@ -29,13 +33,15 @@ def main():
     )
 
     print()
-    print("===== RESULT =====")
-    print(
-        f"Trades: {result.total_trades}"
-    )
-    print(
-        f"Balance: {result.final_balance}"
-    )
+    print("===== BACKTEST RESULT =====")
+    print(f"Symbol: {result.symbol}")
+    print(f"Total trades: {result.total_trades}")
+    print(f"Winning trades: {result.winning_trades}")
+    print(f"Losing trades: {result.losing_trades}")
+    print(f"Win rate: {result.win_rate:.2f}%")
+    print(f"Total PnL: {result.total_pnl:.2f} USDT")
+    print(f"Return: {result.return_percentage:.2f}%")
+    print(f"Final balance: {result.final_balance:.2f} USDT")
 
 
 if __name__ == "__main__":

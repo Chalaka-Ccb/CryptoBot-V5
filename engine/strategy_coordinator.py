@@ -1,3 +1,5 @@
+
+
 from dataclasses import dataclass
 
 from core.models.candle import Candle
@@ -11,6 +13,7 @@ class StrategyEvaluation:
 
 
 class StrategyCoordinator:
+
     def __init__(
         self,
         strategies_15m: list,
@@ -62,8 +65,8 @@ class StrategyCoordinator:
 
     @staticmethod
     def _evaluate_strategies(
-            strategies: list,
-            candles: list[Candle],
+        strategies: list,
+        candles: list[Candle],
     ) -> TradingSignal | None:
 
         if not candles:
@@ -82,4 +85,3 @@ class StrategyCoordinator:
                 return signal
 
         return None
-
