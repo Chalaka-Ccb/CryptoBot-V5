@@ -21,7 +21,7 @@ class BacktestRunner:
     strategy_coordinator: StrategyCoordinator
 
     initial_balance: float = 10_000.0
-    risk_percentage: float = 0.02
+    risk_percentage: float = 0.05
     default_risk_reward: float = 3.0
     default_stop_percentage: float = 0.01
 
