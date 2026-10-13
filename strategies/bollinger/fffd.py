@@ -8,6 +8,7 @@ from indicators.bollinger_bands import calculate_bollinger_bands
 from strategies.bollinger.config import BollingerConfig
 from indicators.atr import calculate_atr
 from indicators.macd import calculate_macd
+from indicators.ema import calculate_ema
 class FFFDStrategy:
 
     name = "fffd"
@@ -21,6 +22,9 @@ class FFFDStrategy:
             use_liquidity_sweep: bool = False,
             liquidity_lookback: int = 10,
             min_reward_risk: float = 0.0,
+            use_long_ema_filter: bool = False,
+            long_ema_period: int = 200,
+            long_ema_slope_lookback: int = 0,
     ):
         if not 0 <= min_band_penetration < 1:
             raise ValueError("Invalid band penetration")
@@ -43,7 +47,17 @@ class FFFDStrategy:
             raise ValueError(
                 "min_reward_risk cannot be negative"
             )
+        if long_ema_period <= 0:
+            raise ValueError("long_ema_period must be positive")
 
+        if long_ema_slope_lookback < 0:
+            raise ValueError(
+                "long_ema_slope_lookback cannot be negative"
+            )
+
+        self.use_long_ema_filter = use_long_ema_filter
+        self.long_ema_period = long_ema_period
+        self.long_ema_slope_lookback = long_ema_slope_lookback
         self.min_reward_risk = min_reward_risk
         self.use_liquidity_sweep = use_liquidity_sweep
         self.liquidity_lookback = liquidity_lookback
@@ -55,6 +69,57 @@ class FFFDStrategy:
         self._bands = []
         self._macd_cache_key: tuple[int, int] | None = None
         self._macd_values = []
+        self._ema_cache_key = None
+        self._ema_values = []
+        # Keep input references alive: live polling creates fresh lists and
+        # Python can otherwise reuse an id for different candle contents.
+        self._bands_input = None
+        self._macd_input = None
+        self._ema_input = None
+
+    def _long_ema_confirmed(
+            self,
+            candles: list[Candle],
+            index: int,
+    ) -> bool:
+
+        if not self.use_long_ema_filter:
+            return True
+
+        if index < (
+                self.long_ema_period - 1
+                + self.long_ema_slope_lookback
+        ):
+            return False
+
+        ema_values = calculate_ema(
+            candles,
+            period=self.long_ema_period,
+        )
+
+        current_ema = ema_values[index]
+
+        if current_ema is None:
+            return False
+
+        # LONG only when price is above EMA.
+        if candles[index].close <= current_ema:
+            return False
+
+        if self.long_ema_slope_lookback > 0:
+            previous_index = (
+                    index - self.long_ema_slope_lookback
+            )
+
+            previous_ema = ema_values[previous_index]
+
+            if previous_ema is None:
+                return False
+
+            if current_ema <= previous_ema:
+                return False
+
+        return True
 
     def _liquidity_sweep_confirmed(
             self,
@@ -101,6 +166,23 @@ class FFFDStrategy:
             )
 
         return False
+
+    def _get_long_ema(
+            self,
+            candles: list[Candle],
+    ) -> list[float | None]:
+
+        key = (id(candles), len(candles))
+
+        if key != self._ema_cache_key:
+            self._ema_input = candles
+            self._ema_values = calculate_ema(
+                candles,
+                period=self.long_ema_period,
+            )
+            self._ema_cache_key = key
+
+        return self._ema_values
 
     def _reward_risk_confirmed(
             self,
@@ -166,6 +248,7 @@ class FFFDStrategy:
         key = (id(candles), len(candles))
 
         if key != self._macd_cache_key:
+            self._macd_input = candles
             self._macd_values = calculate_macd(candles)
             self._macd_cache_key = key
 
@@ -221,6 +304,7 @@ class FFFDStrategy:
         key = (id(candles), len(candles))
 
         if key != self._cache_key:
+            self._bands_input = candles
             self._bands = calculate_bollinger_bands(
                 candles,
                 period=self.config.period,
@@ -280,7 +364,12 @@ class FFFDStrategy:
             index,
             SignalSide.LONG,
         )
+                and self._long_ema_confirmed(
+            candles,
+            index,
+        )
         ):
+
             stop_loss = self._calculate_stop_loss(
                 previous,
                 current,

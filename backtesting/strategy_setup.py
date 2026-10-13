@@ -58,8 +58,12 @@ def create_strategy_coordinator() -> StrategyCoordinator:
     FFFD_MIN_BAND_PENETRATION = 0.0
     FFFD_USE_MACD_EXHAUSTION = True
     FFFD_USE_LIQUIDITY_SWEEP = False
+    FFFD_MIN_REWARD_RISK = 2.0
 
-    FFFD_MIN_REWARD_RISK = 2
+    FFFD_USE_LONG_EMA_FILTER = True
+    FFFD_LONG_EMA_PERIOD = 200
+    FFFD_LONG_EMA_SLOPE_LOOKBACK = 0
+
 
 
     strategies_15m = [
@@ -71,6 +75,9 @@ def create_strategy_coordinator() -> StrategyCoordinator:
             use_macd_exhaustion=FFFD_USE_MACD_EXHAUSTION,
             use_liquidity_sweep=FFFD_USE_LIQUIDITY_SWEEP,
             min_reward_risk=FFFD_MIN_REWARD_RISK,
+            use_long_ema_filter = FFFD_USE_LONG_EMA_FILTER,
+            long_ema_period = FFFD_LONG_EMA_PERIOD,
+            long_ema_slope_lookback = FFFD_LONG_EMA_SLOPE_LOOKBACK,
         ),
         # ChannelReboundStrategy(),
         #NR7Strategy(),
@@ -89,6 +96,9 @@ def create_strategy_coordinator() -> StrategyCoordinator:
             use_macd_exhaustion=FFFD_USE_MACD_EXHAUSTION,
             use_liquidity_sweep=FFFD_USE_LIQUIDITY_SWEEP,
             min_reward_risk=FFFD_MIN_REWARD_RISK,
+            use_long_ema_filter = FFFD_USE_LONG_EMA_FILTER,
+            long_ema_period = FFFD_LONG_EMA_PERIOD,
+            long_ema_slope_lookback = FFFD_LONG_EMA_SLOPE_LOOKBACK,
         ),
         # BollingerSqueezeStrategy(),
         # ChannelReboundStrategy(),

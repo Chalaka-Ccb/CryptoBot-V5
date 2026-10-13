@@ -1,6 +1,8 @@
 # CryptoBot-V5
 
-Live execution for Bitget (default) and Bybit: [setup and operations](engine/LIVE_ENGINE.md).
+FFFD live trading defaults to Bybit SOL perpetuals using the backtest settings.
+See [changes and DigitalOcean deployment](deploy/README.md) for installation,
+credentials, preflight, testnet and production operation.
 
 A modular, research-grade **algorithmic crypto trading bot** written in pure Python (no heavy
 frameworks — everything from indicators to risk math is implemented from scratch). The project
@@ -233,7 +235,7 @@ The backtest prints every opened/closed trade, signal, and rejection reason, and
 
 ## Known Gaps / TODO (as-implemented notes)
 
-- `requrements.txt` is empty (typo'd filename); `ccxt` must be installed manually.
+- Install the pinned CCXT dependency with `pip install -r requirements.txt`.
 - `backtesting/portfolio.py` is an empty placeholder.
 - The `patterns/` library is not yet wired into any strategy or the engine.
 - Trailing stops (`risk/trailing/`) are implemented but not yet called by the live engine.

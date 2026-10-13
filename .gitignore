@@ -1,1 +1,7 @@
-(empty)
+__pycache__/
+*.py[cod]
+.venv/
+.idea/
+.env
+*.env
+logs/
