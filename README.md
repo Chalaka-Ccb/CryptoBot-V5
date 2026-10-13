@@ -1,5 +1,7 @@
 # CryptoBot-V5
 
+Live execution for Bitget (default) and Bybit: [setup and operations](engine/LIVE_ENGINE.md).
+
 A modular, research-grade **algorithmic crypto trading bot** written in pure Python (no heavy
 frameworks — everything from indicators to risk math is implemented from scratch). The project
 is organised as a clean pipeline:

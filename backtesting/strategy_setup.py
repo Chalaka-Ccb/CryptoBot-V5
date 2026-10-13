@@ -54,42 +54,46 @@ from strategies.pullback.setup_1234 import (
 
 
 def create_strategy_coordinator() -> StrategyCoordinator:
+    FFFD_STOP_MODE = "EXTREME"
+    FFFD_MIN_BAND_PENETRATION = 0.0
+    FFFD_USE_MACD_EXHAUSTION = True
+    FFFD_USE_LIQUIDITY_SWEEP = False
 
-    # -------------------------------------------------
-    # 15m strategies
-    #
-    # 15m has priority over 5m.
-    # The order here determines which strategy gets
-    # the first opportunity when multiple strategies
-    # produce a signal on the same candle.
-    # -------------------------------------------------
+    FFFD_MIN_REWARD_RISK = 2
+
 
     strategies_15m = [
         # EMACrossoverStrategy(),
         # HiLoMACDStrategy(),
-        # FFFDStrategy(),
-        # BollingerSqueezeStrategy(),
+        FFFDStrategy(
+            min_band_penetration=FFFD_MIN_BAND_PENETRATION,
+            stop_mode=FFFD_STOP_MODE,
+            use_macd_exhaustion=FFFD_USE_MACD_EXHAUSTION,
+            use_liquidity_sweep=FFFD_USE_LIQUIDITY_SWEEP,
+            min_reward_risk=FFFD_MIN_REWARD_RISK,
+        ),
         # ChannelReboundStrategy(),
         #NR7Strategy(),
-        WilliamsRStrategy(),
+        #WilliamsRStrategy(),
         #Setup1234Strategy(),
     ]
 
-    # -------------------------------------------------
-    # 5m strategies
-    #
-    # These are checked only when the 15m timeframe
-    # has no signal.
-    # -------------------------------------------------
+
 
     strategies_5m = [
         # EMACrossoverStrategy(),
         # HiLoMACDStrategy(),
-        # FFFDStrategy(),
+        FFFDStrategy(
+            min_band_penetration=FFFD_MIN_BAND_PENETRATION,
+            stop_mode=FFFD_STOP_MODE,
+            use_macd_exhaustion=FFFD_USE_MACD_EXHAUSTION,
+            use_liquidity_sweep=FFFD_USE_LIQUIDITY_SWEEP,
+            min_reward_risk=FFFD_MIN_REWARD_RISK,
+        ),
         # BollingerSqueezeStrategy(),
         # ChannelReboundStrategy(),
         # NR7Strategy(),
-        WilliamsRStrategy(),
+        #WilliamsRStrategy(),
         #Setup1234Strategy(),
     ]
 

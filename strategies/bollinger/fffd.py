@@ -6,47 +6,210 @@ from core.models.signal import (
 )
 from indicators.bollinger_bands import calculate_bollinger_bands
 from strategies.bollinger.config import BollingerConfig
-
-
+from indicators.atr import calculate_atr
+from indicators.macd import calculate_macd
 class FFFDStrategy:
-    """
-    Fechou Fora - Fechou Dentro (Closed Outside - Closed Inside)
-
-    Statistical mean-reversion counter-trend setup (guide section 4.1).
-
-    Bullish:
-        Step 1: Candle (t-1) closes strictly below the lower band.
-        Step 2: Candle (t) closes back inside (close >= lower band).
-        Step 3: Enter immediately on the close of candle (t).
-        Step 4: Stop beyond the low wick that extended outside the
-                band (candle t-1 low, or candle t low if it is lower),
-                minus stop buffer.
-        Step 5: Take profit at the middle band (SMA 20).
-
-    Bearish:
-        Step 1: Candle (t-1) closes strictly above the upper band.
-        Step 2: Candle (t) closes back inside (close <= upper band).
-        Step 3: Enter immediately on the close of candle (t).
-        Step 4: Stop beyond the high wick that extended outside the
-                band (candle t-1 high, or candle t high if it is
-                higher), plus stop buffer.
-        Step 5: Take profit at the middle band (SMA 20).
-
-    Macro filters (SMA 200, volume vs. volume MA) and the 1:3
-    risk-reward check are applied by the Signal Resolver / Risk
-    Manager, not by this class.
-
-    A signal is skipped when candle (t) already closed beyond the
-    middle band, because the Step 5 target would then be behind the
-    entry price.
-    """
 
     name = "fffd"
 
-    def __init__(self, config: BollingerConfig | None = None):
+    def __init__(
+            self,
+            config: BollingerConfig | None = None,
+            min_band_penetration: float = 0.0,
+            stop_mode: str = "EXTREME",
+            use_macd_exhaustion: bool = False,
+            use_liquidity_sweep: bool = False,
+            liquidity_lookback: int = 10,
+            min_reward_risk: float = 0.0,
+    ):
+        if not 0 <= min_band_penetration < 1:
+            raise ValueError("Invalid band penetration")
+
+        allowed_modes = {
+            "EXTREME",
+            "CANDLE_1",
+            "CANDLE_2",
+        }
+
+        if stop_mode not in allowed_modes:
+            raise ValueError(
+                f"Unsupported stop mode: {stop_mode}"
+            )
+        if liquidity_lookback < 2:
+            raise ValueError(
+                "liquidity_lookback must be at least 2"
+            )
+        if min_reward_risk < 0:
+            raise ValueError(
+                "min_reward_risk cannot be negative"
+            )
+
+        self.min_reward_risk = min_reward_risk
+        self.use_liquidity_sweep = use_liquidity_sweep
+        self.liquidity_lookback = liquidity_lookback
         self.config = config or BollingerConfig()
+        self.min_band_penetration = min_band_penetration
+        self.stop_mode = stop_mode
+        self.use_macd_exhaustion = use_macd_exhaustion
         self._cache_key: tuple[int, int] | None = None
         self._bands = []
+        self._macd_cache_key: tuple[int, int] | None = None
+        self._macd_values = []
+
+    def _liquidity_sweep_confirmed(
+            self,
+            candles: list[Candle],
+            index: int,
+            side: SignalSide,
+    ) -> bool:
+
+        if not self.use_liquidity_sweep:
+            return True
+
+        # index - 1 is the outside-band candle.
+        # Historical reference candles must end
+        # before that candle.
+        sweep_index = index - 1
+        start = sweep_index - self.liquidity_lookback
+
+        if start < 0:
+            return False
+
+        previous_candles = candles[start:sweep_index]
+
+        sweep_candle = candles[sweep_index]
+        confirmation_candle = candles[index]
+
+        if side == SignalSide.LONG:
+            liquidity_level = min(
+                candle.low for candle in previous_candles
+            )
+
+            return (
+                    sweep_candle.low < liquidity_level
+                    and confirmation_candle.close > liquidity_level
+            )
+
+        if side == SignalSide.SHORT:
+            liquidity_level = max(
+                candle.high for candle in previous_candles
+            )
+
+            return (
+                    sweep_candle.high > liquidity_level
+                    and confirmation_candle.close < liquidity_level
+            )
+
+        return False
+
+    def _reward_risk_confirmed(
+            self,
+            entry_price: float,
+            stop_loss: float,
+            take_profit: float,
+            side: SignalSide,
+    ) -> bool:
+
+        if side == SignalSide.LONG:
+            risk = entry_price - stop_loss
+            reward = take_profit - entry_price
+
+        elif side == SignalSide.SHORT:
+            risk = stop_loss - entry_price
+            reward = entry_price - take_profit
+
+        else:
+            return False
+
+        # Always reject invalid stop or target geometry.
+        if risk <= 0 or reward <= 0:
+            return False
+
+        reward_risk = reward / risk
+
+        return reward_risk >= self.min_reward_risk
+
+    def _calculate_stop_loss(
+            self,
+            previous: Candle,
+            current: Candle,
+            side: SignalSide,
+    ) -> float:
+
+        if side == SignalSide.LONG:
+            if self.stop_mode == "CANDLE_1":
+                base = previous.low
+            elif self.stop_mode == "CANDLE_2":
+                base = current.low
+            else:
+                base = min(previous.low, current.low)
+
+            return base * (
+                    1 - self.config.stop_buffer_percent
+            )
+
+        if side == SignalSide.SHORT:
+            if self.stop_mode == "CANDLE_1":
+                base = previous.high
+            elif self.stop_mode == "CANDLE_2":
+                base = current.high
+            else:
+                base = max(previous.high, current.high)
+
+            return base * (
+                    1 + self.config.stop_buffer_percent
+            )
+
+        raise ValueError(f"Unsupported side: {side}")
+
+    def _get_macd(self, candles: list[Candle]):
+        key = (id(candles), len(candles))
+
+        if key != self._macd_cache_key:
+            self._macd_values = calculate_macd(candles)
+            self._macd_cache_key = key
+
+        return self._macd_values
+
+    def _macd_exhaustion_confirmed(
+            self,
+            candles: list[Candle],
+            index: int,
+            side: SignalSide,
+    ) -> bool:
+
+        if not self.use_macd_exhaustion:
+            return True
+
+        if index < 1:
+            return False
+
+        macd = self._get_macd(candles)
+
+        previous = macd[index - 1]
+        current = macd[index]
+
+        if previous is None or current is None:
+            return False
+
+        previous_hist = previous.histogram
+        current_hist = current.histogram
+
+        if side == SignalSide.LONG:
+            return (
+                    previous_hist < 0
+                    and current_hist < 0
+                    and current_hist > previous_hist
+            )
+
+        if side == SignalSide.SHORT:
+            return (
+                    previous_hist > 0
+                    and current_hist > 0
+                    and current_hist < previous_hist
+            )
+
+        return False
 
     def _get_bands(self, candles: list[Candle]):
         """
@@ -92,7 +255,9 @@ class FFFDStrategy:
         # -----------------------------------
 
         outside_lower = (
-            previous.close < previous_band.lower
+                previous.close
+                < previous_band.lower
+                * (1 - self.min_band_penetration)
         )
 
         closed_inside_lower = (
@@ -100,16 +265,35 @@ class FFFDStrategy:
         )
 
         # The middle-band target must still be ahead of the entry.
-        if (
-            outside_lower
-            and closed_inside_lower
-            and current.close < current_band.middle
-        ):
 
-            stop_loss = (
-                min(previous.low, current.low)
-                * (1 - self.config.stop_buffer_percent)
+        if (
+                outside_lower
+                and closed_inside_lower
+                and current.close < current_band.middle
+                and self._macd_exhaustion_confirmed(
+            candles,
+            index,
+            SignalSide.LONG,
+        )
+                and self._liquidity_sweep_confirmed(
+            candles,
+            index,
+            SignalSide.LONG,
+        )
+        ):
+            stop_loss = self._calculate_stop_loss(
+                previous,
+                current,
+                SignalSide.LONG,
             )
+
+            if not self._reward_risk_confirmed(
+                    entry_price=current.close,
+                    stop_loss=stop_loss,
+                    take_profit=current_band.middle,
+                    side=SignalSide.LONG,
+            ):
+                return None
 
             return TradingSignal(
                 strategy=self.name,
@@ -132,7 +316,9 @@ class FFFDStrategy:
         # -----------------------------------
 
         outside_upper = (
-            previous.close > previous_band.upper
+                previous.close
+                > previous_band.upper
+                * (1 + self.min_band_penetration)
         )
 
         closed_inside_upper = (
@@ -140,16 +326,35 @@ class FFFDStrategy:
         )
 
         # The middle-band target must still be ahead of the entry.
-        if (
-            outside_upper
-            and closed_inside_upper
-            and current.close > current_band.middle
-        ):
 
-            stop_loss = (
-                max(previous.high, current.high)
-                * (1 + self.config.stop_buffer_percent)
+        if (
+                outside_upper
+                and closed_inside_upper
+                and current.close > current_band.middle
+                and self._macd_exhaustion_confirmed(
+            candles,
+            index,
+            SignalSide.SHORT,
+        )
+                and self._liquidity_sweep_confirmed(
+            candles,
+            index,
+            SignalSide.SHORT,
+        )
+        ):
+            stop_loss = self._calculate_stop_loss(
+                previous,
+                current,
+                SignalSide.SHORT,
             )
+
+            if not self._reward_risk_confirmed(
+                    entry_price=current.close,
+                    stop_loss=stop_loss,
+                    take_profit=current_band.middle,
+                    side=SignalSide.SHORT,
+            ):
+                return None
 
             return TradingSignal(
                 strategy=self.name,

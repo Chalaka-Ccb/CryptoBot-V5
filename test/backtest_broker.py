@@ -13,7 +13,7 @@ def main():
     )
 
     market_data = loader.load_market_data(
-        symbol="BTC/USDT:USDT",
+        symbol="SOL/USDT:USDT",
         candles=1000,
     )
 
