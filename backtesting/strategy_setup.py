@@ -65,14 +65,14 @@ def create_strategy_coordinator() -> StrategyCoordinator:
     # -------------------------------------------------
 
     strategies_15m = [
-        EMACrossoverStrategy(),
-        HiLoMACDStrategy(),
-        FFFDStrategy(),
-        BollingerSqueezeStrategy(),
-        ChannelReboundStrategy(),
+        # EMACrossoverStrategy(),
+        # HiLoMACDStrategy(),
+        # FFFDStrategy(),
+        # BollingerSqueezeStrategy(),
+        # ChannelReboundStrategy(),
         #NR7Strategy(),
-        #WilliamsRStrategy(),
-        Setup1234Strategy(),
+        WilliamsRStrategy(),
+        #Setup1234Strategy(),
     ]
 
     # -------------------------------------------------
@@ -83,14 +83,14 @@ def create_strategy_coordinator() -> StrategyCoordinator:
     # -------------------------------------------------
 
     strategies_5m = [
-        EMACrossoverStrategy(),
-        HiLoMACDStrategy(),
-        FFFDStrategy(),
-        BollingerSqueezeStrategy(),
-        ChannelReboundStrategy(),
+        # EMACrossoverStrategy(),
+        # HiLoMACDStrategy(),
+        # FFFDStrategy(),
+        # BollingerSqueezeStrategy(),
+        # ChannelReboundStrategy(),
         # NR7Strategy(),
-        # WilliamsRStrategy(),
-        Setup1234Strategy(),
+        WilliamsRStrategy(),
+        #Setup1234Strategy(),
     ]
 
     return StrategyCoordinator(

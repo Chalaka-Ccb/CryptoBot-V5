@@ -4,6 +4,7 @@ from core.models.signal import (
     SignalSide,
     EntryTiming,
 )
+from indicators.atr import calculate_atr
 from indicators.ema import calculate_ema
 from indicators.volume_spike import calculate_volume_spike
 from indicators.williams_r import calculate_williams_r
@@ -21,6 +22,7 @@ class WilliamsRStrategy:
     Long condition:
         (%R[t-1] < oversold) AND (%R[t] > oversold)
         AND (close[t] > EMA200[t])
+        AND (EMA200[t] > EMA200[t-5])
         AND (volume[t] >= 1.2 * volume SMA(20)[t])
 
     Zones (%R is bounded between 0 and -100):
@@ -47,9 +49,10 @@ class WilliamsRStrategy:
         as a breakout of the signal candle high plus
         `trigger_offset`.
 
-    Stop loss (strategy-own, the guide gives none for %R):
-        Long: lowest low of the oversold sequence plus the signal
-              candle.
+    Stop loss (ATR method from the guide):
+        Long: entry price - 1.5 * ATR(14) on the signal candle.
+        (`_find_oversold_low` is retained for structural-stop
+        comparisons but is not used for the stop.)
 
     No take profit is set; the engine applies the guide's default
     target (1:3 risk-reward).
@@ -145,7 +148,7 @@ class WilliamsRStrategy:
         current = candles[index]
 
         # -----------------------------------
-        # 1. EMA 200 trend filter
+        # 1. EMA 200 trend + slope confirmation
         # -----------------------------------
 
         ema_values = calculate_ema(
@@ -153,13 +156,25 @@ class WilliamsRStrategy:
             period=200,
         )
 
-        current_ema = ema_values[index]
+        slope_lookback = 5
 
-        if current_ema is None:
+        # Need enough candles for EMA 200
+        # and five additional candles for slope.
+        if index < 199 + slope_lookback:
             return None
 
-        # LONG trades only above EMA 200.
+        current_ema = ema_values[index]
+        previous_ema = ema_values[index - slope_lookback]
+
+        if current_ema is None or previous_ema is None:
+            return None
+
+        # Condition 1: Price above EMA 200.
         if current.close <= current_ema:
+            return None
+
+        # Condition 2: EMA 200 must be rising.
+        if current_ema <= previous_ema:
             return None
 
         # -----------------------------------
@@ -206,13 +221,29 @@ class WilliamsRStrategy:
 
         trigger_price, entry_timing = self._entry(current)
 
-        stop_loss = self._find_oversold_low(
+        # -----------------------------------
+        # ATR-based stop-loss
+        # -----------------------------------
+
+        atr_values = calculate_atr(
             historical_candles,
-            williams_r,
-            index,
+            period=14,
         )
 
-        if stop_loss >= trigger_price:
+        current_atr = atr_values[index]
+
+        if current_atr is None or current_atr <= 0:
+            return None
+
+        atr_multiplier = 1.5
+
+        stop_loss = (
+            trigger_price
+            - atr_multiplier * current_atr
+        )
+
+        # Reject invalid stop-loss.
+        if stop_loss <= 0 or stop_loss >= trigger_price:
             return None
 
         return TradingSignal(
@@ -325,6 +356,3 @@ class WilliamsRStrategy:
             previous_value,
             current_value,
         )
-
-
-

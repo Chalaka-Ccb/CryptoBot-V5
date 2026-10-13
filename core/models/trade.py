@@ -28,6 +28,8 @@ class Trade:
     exit_reason: Optional[ExitReason] = None
 
     fees: float = 0.0
+    entry_fee: float = 0.0
+    exit_fee: float = 0.0
 
     @property
     def is_open(self) -> bool:
@@ -76,5 +78,9 @@ class Trade:
         self.exit_price = exit_price
         self.exit_time = exit_time
         self.exit_reason = exit_reason
+        if fees < 0:
+            raise ValueError("fees cannot be negative")
+
+        self.exit_fee = fees
         self.fees += fees
         self.status = TradeStatus.CLOSED

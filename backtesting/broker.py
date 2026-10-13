@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
-
+from backtesting.fee_config import FeeConfig
 from core.enums.position import PositionSide
 from core.enums.trade import ExitReason
 from core.models.trade import Trade
@@ -11,7 +11,8 @@ from core.models.trade import Trade
 class BacktestBroker:
     balance: float
     trade_counter: int = 0
-
+    fee_config: FeeConfig = field(default_factory=FeeConfig)
+    total_fees: float = 0.0
     current_trades: dict[str, Trade] = field(default_factory=dict)
     trailing_stop_trades: set[str] = field(default_factory=set)
 
@@ -60,6 +61,11 @@ class BacktestBroker:
                 raise ValueError("SHORT TP must be below entry")
 
         self.trade_counter += 1
+        entry_notional = quantity * entry_price
+        entry_fee = entry_notional * self.fee_config.taker_rate
+
+        if self.balance < entry_fee:
+            raise ValueError("Insufficient balance for entry fee")
 
         trade = Trade(
             trade_id=f"BT-{self.trade_counter:06d}",
@@ -71,9 +77,13 @@ class BacktestBroker:
             strategy=strategy,
             stop_loss=stop_loss,
             take_profit=take_profit,
+            fees=entry_fee,
+            entry_fee=entry_fee,
         )
 
         self.current_trades[symbol] = trade
+        self.balance -= entry_fee
+        self.total_fees += entry_fee
 
         print("\n===== TRADE OPENED =====")
         print(f"Trade ID: {trade.trade_id}")
@@ -84,6 +94,8 @@ class BacktestBroker:
         print(f"SL: {trade.stop_loss}")
         print(f"TP: {trade.take_profit}")
         print(f"Time: {trade.entry_time}")
+        print(f"Entry fee: {entry_fee:.4f}")
+        print(f"Balance after entry fee: {self.balance:.4f}")
 
         return trade
 
@@ -206,24 +218,41 @@ class BacktestBroker:
         if trade is None:
             raise ValueError(f"No open trade for {symbol}")
 
+        if exit_price <= 0:
+            raise ValueError("Invalid exit price")
+
+        exit_notional = trade.quantity * exit_price
+        exit_fee = exit_notional * self.fee_config.taker_rate
+
         trade.close(
             exit_price=exit_price,
             exit_time=exit_time,
             exit_reason=exit_reason,
+            fees=exit_fee,
         )
 
-        pnl = trade.net_pnl or 0.0
-        self.balance += pnl
+        self.total_fees += exit_fee
 
+        # Entry fee was already deducted at opening.
+        # Therefore, only gross P&L minus exit fee is applied here.
+        gross_pnl = trade.gross_pnl
+        assert gross_pnl is not None
+
+        self.balance += gross_pnl - exit_fee
+
+        pnl = trade.net_pnl
+        assert pnl is not None
         self.trailing_stop_trades.discard(trade.trade_id)
 
         print("\n===== TRADE CLOSED =====")
         print(f"Trade ID: {trade.trade_id}")
         print(f"Strategy: {trade.strategy}")
-        print(f"Entry: {trade.entry_price}")
-        print(f"Exit: {trade.exit_price}")
+        print(f"Gross PnL: {gross_pnl:.4f}")
+        print(f"Entry fee: {trade.entry_fee:.4f}")
+        print(f"Exit fee: {trade.exit_fee:.4f}")
+        print(f"Total fees: {trade.fees:.4f}")
+        print(f"Net PnL: {pnl:.4f}")
         print(f"Reason: {trade.exit_reason.value}")
-        print(f"PnL: {pnl:.4f}")
         print(f"Balance: {self.balance:.4f}")
 
         return trade
