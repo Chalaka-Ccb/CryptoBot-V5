@@ -1,4 +1,4 @@
-"""Conservative limits for risk-based position sizing."""
+"""Risk and exchange quantity limits for Live V1."""
 from dataclasses import dataclass
 from risk.validation import finite_number
 
@@ -15,9 +15,8 @@ class QuantityLimits:
             value = getattr(self, name)
             if value is not None:
                 finite_number(name, value, positive=True)
-        if self.minimum is not None and self.maximum is not None:
-            if self.minimum > self.maximum:
-                raise ValueError("minimum cannot exceed maximum")
+        if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
+            raise ValueError("minimum cannot exceed maximum")
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-"""Numeric validation shared by sizing and risk checks."""
+"""Shared numeric validation for live risk checks."""
 import math
 
 
