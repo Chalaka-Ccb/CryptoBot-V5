@@ -14,7 +14,7 @@ def main():
 
     market_data = loader.load_market_data(
         symbol="SOL/USDT:USDT",
-        candles=1000,
+        candles=3500,
     )
 
     coordinator = create_strategy_coordinator()
@@ -22,7 +22,7 @@ def main():
     runner = BacktestRunner(
         strategy_coordinator=coordinator,
         initial_balance=10_000.0,
-        risk_percentage=0.02,
+        risk_percentage=0.05,
         default_risk_reward=3.0,
         default_stop_percentage=0.01,
         breakout_expiry_candles=3,

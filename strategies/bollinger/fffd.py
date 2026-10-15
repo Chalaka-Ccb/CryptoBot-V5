@@ -6,7 +6,7 @@ from core.models.signal import (
 )
 from indicators.bollinger_bands import calculate_bollinger_bands
 from strategies.bollinger.config import BollingerConfig
-from indicators.atr import calculate_atr
+from indicators.rsi import calculate_rsi
 from indicators.macd import calculate_macd
 from indicators.ema import calculate_ema
 class FFFDStrategy:
@@ -25,6 +25,11 @@ class FFFDStrategy:
             use_long_ema_filter: bool = False,
             long_ema_period: int = 200,
             long_ema_slope_lookback: int = 0,
+            use_short_ema_filter: bool = False,
+            use_short_rsi_filter: bool = False,
+            short_rsi_period: int = 14,
+            short_rsi_threshold: float = 65.0,
+            short_rsi_mode: str = "FALLING",
     ):
         if not 0 <= min_band_penetration < 1:
             raise ValueError("Invalid band penetration")
@@ -54,7 +59,22 @@ class FFFDStrategy:
             raise ValueError(
                 "long_ema_slope_lookback cannot be negative"
             )
+        if short_rsi_period <= 0:
+            raise ValueError("short_rsi_period must be positive")
 
+        if not 0 <= short_rsi_threshold <= 100:
+            raise ValueError("short_rsi_threshold must be between 0 and 100")
+
+        if short_rsi_mode not in {"FALLING", "CROSS_BELOW"}:
+            raise ValueError("Unsupported short RSI mode")
+
+        self.use_short_rsi_filter = use_short_rsi_filter
+        self.short_rsi_period = short_rsi_period
+        self.short_rsi_threshold = short_rsi_threshold
+        self.short_rsi_mode = short_rsi_mode
+        self._rsi_cache_key = None
+        self._rsi_values = []
+        self.use_short_ema_filter = use_short_ema_filter
         self.use_long_ema_filter = use_long_ema_filter
         self.long_ema_period = long_ema_period
         self.long_ema_slope_lookback = long_ema_slope_lookback
@@ -76,6 +96,78 @@ class FFFDStrategy:
         self._bands_input = None
         self._macd_input = None
         self._ema_input = None
+
+    @staticmethod
+    def _make_cache_key(
+            candles: list[Candle],
+    ) -> tuple:
+        return (
+            id(candles),
+            len(candles),
+            tuple(
+                (
+                    candle.open,
+                    candle.high,
+                    candle.low,
+                    candle.close,
+                )
+                for candle in candles
+            ),
+        )
+
+    def _get_short_rsi(
+            self,
+            candles: list[Candle],
+    ) -> list[float | None]:
+
+        key = self._make_cache_key(candles)
+
+        if key != self._rsi_cache_key:
+            self._rsi_values = calculate_rsi(
+                candles,
+                period=self.short_rsi_period,
+            )
+            self._rsi_cache_key = key
+
+        return self._rsi_values
+
+    def _short_rsi_confirmed(
+            self,
+            candles: list[Candle],
+            index: int,
+    ) -> bool:
+
+        if not self.use_short_rsi_filter:
+            return True
+
+        # RSI requires period + 1 candles.
+        # We also need the previous RSI value.
+        if index <= self.short_rsi_period:
+            return False
+
+        rsi_values = self._get_short_rsi(candles)
+
+        previous_rsi = rsi_values[index - 1]
+        current_rsi = rsi_values[index]
+
+        if previous_rsi is None or current_rsi is None:
+            return False
+
+        threshold = self.short_rsi_threshold
+
+        if self.short_rsi_mode == "FALLING":
+            return (
+                    previous_rsi >= threshold
+                    and current_rsi < previous_rsi
+            )
+
+        if self.short_rsi_mode == "CROSS_BELOW":
+            return (
+                    previous_rsi >= threshold
+                    and current_rsi < threshold
+            )
+
+        return False
 
     def _long_ema_confirmed(
             self,
@@ -117,6 +209,49 @@ class FFFDStrategy:
                 return False
 
             if current_ema <= previous_ema:
+                return False
+
+        return True
+
+    def _short_ema_confirmed(
+            self,
+            candles: list[Candle],
+            index: int,
+    ) -> bool:
+
+        if not self.use_short_ema_filter:
+            return True
+
+        if index < (
+                self.long_ema_period - 1
+                + self.long_ema_slope_lookback
+        ):
+            return False
+
+        # Reuse the EMA already calculated for LONG.
+        ema_values = self._get_long_ema(candles)
+
+        current_ema = ema_values[index]
+
+        if current_ema is None:
+            return False
+
+        # SHORT only when price is below EMA 200.
+        if candles[index].close >= current_ema:
+            return False
+
+        # Optional falling EMA confirmation.
+        if self.long_ema_slope_lookback > 0:
+            previous_index = (
+                    index - self.long_ema_slope_lookback
+            )
+
+            previous_ema = ema_values[previous_index]
+
+            if previous_ema is None:
+                return False
+
+            if current_ema >= previous_ema:
                 return False
 
         return True
@@ -171,11 +306,9 @@ class FFFDStrategy:
             self,
             candles: list[Candle],
     ) -> list[float | None]:
-
-        key = (id(candles), len(candles))
+        key = self._make_cache_key(candles)
 
         if key != self._ema_cache_key:
-            self._ema_input = candles
             self._ema_values = calculate_ema(
                 candles,
                 period=self.long_ema_period,
@@ -244,11 +377,13 @@ class FFFDStrategy:
 
         raise ValueError(f"Unsupported side: {side}")
 
-    def _get_macd(self, candles: list[Candle]):
-        key = (id(candles), len(candles))
+    def _get_macd(
+            self,
+            candles: list[Candle],
+    ):
+        key = self._make_cache_key(candles)
 
         if key != self._macd_cache_key:
-            self._macd_input = candles
             self._macd_values = calculate_macd(candles)
             self._macd_cache_key = key
 
@@ -294,17 +429,13 @@ class FFFDStrategy:
 
         return False
 
-    def _get_bands(self, candles: list[Candle]):
-        """
-        Compute Bollinger Bands once per candle list instead of on
-        every call. Rebuilt when the list object or its length
-        changes (live data appending candles).
-        """
-
-        key = (id(candles), len(candles))
+    def _get_bands(
+            self,
+            candles: list[Candle],
+    ):
+        key = self._make_cache_key(candles)
 
         if key != self._cache_key:
-            self._bands_input = candles
             self._bands = calculate_bollinger_bands(
                 candles,
                 period=self.config.period,
@@ -430,7 +561,16 @@ class FFFDStrategy:
             index,
             SignalSide.SHORT,
         )
+                and self._short_ema_confirmed(
+            candles,
+            index,
+        )
+                and self._short_rsi_confirmed(
+            candles,
+            index,
+        )
         ):
+
             stop_loss = self._calculate_stop_loss(
                 previous,
                 current,
