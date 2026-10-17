@@ -91,6 +91,7 @@ class LiveEngine:
             self.broker.history[(symbol, timeframe)] = {r[0]: r for r in rows}
 
     def initialize(self):
+        raise RuntimeError("LEGACY LIVE ENGINE DISABLED: do not use for trading")
         self.broker.initialize()
         for strategies in (self.coordinator.strategies_15m, self.coordinator.strategies_5m):
             for strategy in strategies:
@@ -216,6 +217,7 @@ class LiveEngine:
         return data["drawdown_triggered"]
 
     def _submit(self, order, request, metadata):
+        raise RuntimeError('LEGACY LIVE ENGINE DISABLED: do not use for trading')
         record = self._record_order(order) | metadata
         self.journal.data["orders"][order.order_id] = record
         self.journal.save()
@@ -226,6 +228,7 @@ class LiveEngine:
         return order
 
     def _expire_breakouts(self, now):
+        raise RuntimeError('LEGACY LIVE ENGINE DISABLED: do not use for trading')
         for client_id, record in list(self.journal.data["orders"].items()):
             if not record.get("expires_at") or now < datetime.fromisoformat(record["expires_at"]):
                 continue
@@ -238,6 +241,7 @@ class LiveEngine:
         self.reconcile()
 
     def _close_managed(self, symbol, reference, reason):
+        raise RuntimeError('LEGACY LIVE ENGINE DISABLED: do not use for trading')
         if not self.config.enabled:
             return None
         for client_id, record in list(self.journal.data["orders"].items()):
@@ -256,6 +260,7 @@ class LiveEngine:
         return self._submit(order, request, {"action": "exit", "exit_reason": reason.value})
 
     def _manage_position(self, symbol, c15, c5, new15, boundary):
+        raise RuntimeError('LEGACY LIVE ENGINE DISABLED: do not use for trading')
         position = self.journal.data["positions"].get(symbol)
         if not position or position["closing"] or symbol not in self.live_positions:
             return
@@ -268,6 +273,7 @@ class LiveEngine:
             {position["trade_id"]: timeframe}, boundary)
 
     def _enter(self, symbol, evaluation, c5, boundary, now):
+        raise RuntimeError('LEGACY LIVE ENGINE DISABLED: do not use for trading')
         signal = evaluation.signal
         breakout = signal.entry_timing == EntryTiming.BREAKOUT
         if breakout:
@@ -311,6 +317,7 @@ class LiveEngine:
         })
 
     def run_once(self, now=None):
+        raise RuntimeError('LEGACY LIVE ENGINE DISABLED: do not use for trading')
         now = now or datetime.now(timezone.utc)
         self.reconcile()
         self._expire_breakouts(now)
@@ -347,6 +354,7 @@ class LiveEngine:
         return submitted
 
     def run(self):
+        raise RuntimeError('LEGACY LIVE ENGINE DISABLED: do not use for trading')
         try:
             self.initialize()
             while not self.stop_requested.is_set():

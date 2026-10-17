@@ -43,6 +43,7 @@ class LiveBroker(Broker):
                     raise ValueError(f"{symbol} does not support {feature} in this CCXT version")
 
     def configure_symbol(self, symbol):
+        raise RuntimeError("LEGACY LIVE EXECUTION DISABLED: use guarded Live V1 only")
         # Runner calls this only after proving the symbol has no exposure.
         from ccxt import NoChange
         operations = (
@@ -148,6 +149,7 @@ class LiveBroker(Broker):
         return (order.symbol, kind, order.side.value, amount, price, params)
 
     def submit_prepared(self, order, request):
+        raise RuntimeError('LEGACY LIVE EXECUTION DISABLED: use guarded Live V1 only')
         if not self.config.enabled:
             raise RuntimeError("Set LIVE_TRADING_ENABLED=true to submit orders")
         self.orders[order.order_id] = order
@@ -160,6 +162,7 @@ class LiveBroker(Broker):
 
     def submit_order(self, order):
         # Plain submission cannot accidentally open an unprotected position.
+        raise RuntimeError('LEGACY LIVE EXECUTION DISABLED: use guarded Live V1 only')
         return self.submit_prepared(order, self.prepare(order))
 
     def update_order(self, order, result):
@@ -197,6 +200,7 @@ class LiveBroker(Broker):
         return order
 
     def update_stop_loss(self, position, price):
+        raise RuntimeError('LEGACY LIVE EXECUTION DISABLED: use guarded Live V1 only')
         if not self.config.enabled:
             raise RuntimeError("Live trading is disabled")
         symbol = position["symbol"]
@@ -226,6 +230,7 @@ class LiveBroker(Broker):
         return float(stop)
 
     def cancel_order(self, order_id):
+        raise RuntimeError('LEGACY LIVE EXECUTION DISABLED: use guarded Live V1 only')
         if not self.config.enabled:
             raise RuntimeError("Live trading is disabled")
         order = self.orders[order_id]
