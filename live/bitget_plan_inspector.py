@@ -62,9 +62,17 @@ class BitgetPlanInspector:
                 data = raw.get('data')
                 if not isinstance(data, dict):
                     raise RuntimeError('Malformed plan-order response data')
-                rows = data.get('entrustedList')
-                if not isinstance(rows, list):
+                if 'entrustedList' not in data:
                     raise RuntimeError('Missing plan-order list')
+                rows = data['entrustedList']
+                if rows is None:
+                    # Bitget Classic V2 returns null for an empty first page.
+                    # Only accept this when pagination is also empty.
+                    if cursor is not None or data.get('endId') not in (None, ''):
+                        raise RuntimeError('Ambiguous null plan-order page')
+                    rows = []
+                if not isinstance(rows, list):
+                    raise RuntimeError('Invalid plan-order list')
                 for row in rows:
                     if not isinstance(row, dict):
                         raise RuntimeError('Malformed plan order')
