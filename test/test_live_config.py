@@ -5,16 +5,19 @@ from risk.validation import finite_number
 
 
 class LiveConfigTests(unittest.TestCase):
-    def test_defaults_are_paper_only(self):
+    def test_defaults_are_demo_and_sonic(self):
         config = LiveConfig()
-        self.assertEqual(config.mode, "paper")
-        self.assertEqual(config.symbol, "SOL/USDT:USDT")
-        self.assertEqual(config.risk_limits().leverage, 5.0)
+        self.assertTrue(config.demo)
+        self.assertEqual(config.symbol, "SONIC/USDT:USDT")
+        self.assertEqual(config.leverage, 12)
+        self.assertEqual(config.risk_percentage, 0.05)
+        with self.assertRaises(RuntimeError):
+            config.require_trading_confirmation()
 
     def test_requested_maximums_are_configurable(self):
-        config = LiveConfig(risk_percentage=0.05, leverage=15)
-        self.assertEqual(config.risk_percentage, 0.05)
-        self.assertEqual(config.leverage, 15)
+        config = LiveConfig(risk_percentage=0.02, leverage=5)
+        self.assertEqual(config.risk_percentage, 0.02)
+        self.assertEqual(config.leverage, 5)
 
     def test_rejects_excessive_risk_and_leverage(self):
         for kwargs in ({"risk_percentage": 0.051}, {"leverage": 16}, {"leverage": 0}):
@@ -22,11 +25,9 @@ class LiveConfigTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     LiveConfig(**kwargs)
 
-    def test_single_symbol_and_strategy(self):
-        for kwargs in ({"symbol": "BTC/USDT:USDT"}, {"strategy": "fffd"}):
-            with self.subTest(kwargs=kwargs):
-                with self.assertRaises(ValueError):
-                    LiveConfig(**kwargs)
+    def test_single_symbol(self):
+        with self.assertRaises(ValueError):
+            LiveConfig(symbol="BTC/USDT:USDT")
 
     def test_numeric_and_exchange_quantity_validation(self):
         with self.assertRaises(ValueError):

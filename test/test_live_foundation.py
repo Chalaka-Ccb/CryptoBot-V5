@@ -10,7 +10,7 @@ class FoundationTests(unittest.TestCase):
     def test_defaults_and_limits(self):
         cfg = LiveConfig()
         cfg.validate()
-        self.assertEqual((cfg.symbol, cfg.risk_percentage, cfg.leverage), ("SOL/USDT:USDT", 0.05, 12))
+        self.assertEqual((cfg.symbol, cfg.risk_percentage, cfg.leverage), ("SONIC/USDT:USDT", 0.05, 12))
         with self.assertRaises(ValueError):
             LiveConfig(leverage=13).validate()
         with self.assertRaises(RuntimeError):
@@ -31,6 +31,7 @@ class FoundationTests(unittest.TestCase):
             rec = Recorder(Path(d) / "data", Path(d) / "logs")
             rec.event("test_event", api_secret="do_not_log")
             self.assertNotIn("do_not_log", (Path(d) / "data" / "events.jsonl").read_text())
+            rec.close()
 
 if __name__ == "__main__":
     unittest.main()

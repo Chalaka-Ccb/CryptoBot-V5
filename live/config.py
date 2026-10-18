@@ -39,6 +39,9 @@ class LiveConfig:
     data_dir: str = "data"
     log_dir: str = "logs"
 
+    def __post_init__(self):
+        self.validate()
+
     @classmethod
     def from_env(cls, path=".env"):
         e = _dotenv(path)

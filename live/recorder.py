@@ -12,7 +12,7 @@ class Recorder:
         self.logs = Path(log_dir)
         self.data.mkdir(parents=True, exist_ok=True)
         self.logs.mkdir(parents=True, exist_ok=True)
-        self.logger = logging.getLogger("cryptobot.live")
+        self.logger = logging.getLogger("cryptobot.live." + str(self.logs.resolve()))
         self.logger.setLevel(logging.INFO)
         self.logger.propagate = False
         if not self.logger.handlers:
@@ -20,6 +20,12 @@ class Recorder:
             for handler in (logging.StreamHandler(), RotatingFileHandler(self.logs / "live.log", maxBytes=5_000_000, backupCount=5)):
                 handler.setFormatter(fmt)
                 self.logger.addHandler(handler)
+
+    def close(self):
+        """Release log files so Windows can delete temporary test directories."""
+        for handler in self.logger.handlers[:]:
+            self.logger.removeHandler(handler)
+            handler.close()
 
     @staticmethod
     def _safe(fields):
