@@ -3,7 +3,7 @@
 Branch: `BitgetEngineV1`. **Development code; not validated for real-money orders.**
 
 ## Configuration
-SOL/USDT:USDT, Channel Rebound only, 15m priority over 5m, breakout expiry 3 completed 5m candles, risk 5% of equity, maximum leverage 12x, isolated margin. Actual fills differ from backtests.
+SONIC/USDT:USDT, Channel Rebound only, 15m priority over 5m, breakout expiry 3 completed 5m candles, risk 5% of equity, maximum leverage 12x, isolated margin. Actual fills differ from backtests.
 
 ## Windows
 ```powershell
@@ -21,7 +21,7 @@ Copy `.env.example` to `.env` and add Bitget credentials. For a real Bitget acco
 ## Current limitations
 - Bitget conditional SL/TP identification and automatic repair require validation on the actual Bitget account type. Current engine fails closed rather than blindly adding protection orders.
 - Partial fills and ambiguous order acknowledgements require reconciliation against the exchange; do not assume an acknowledged market order has filled.
-- `live/ledger.py` provides fee-aware closed-trade reconstruction but is not yet wired to the engine's trade lifecycle.
+- `live/ledger.py` provides fee-aware closed-trade reconstruction but is wired to the engine's close lifecycle, but requires real fill-history validation.
 - Telegram is not implemented.
 - The DigitalOcean systemd unit is a starting template, not a verified deployment.
 - Read-only `--check` confirms API connectivity only. It does **not** validate real order behavior.
