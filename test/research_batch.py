@@ -5,6 +5,8 @@ Run: python -m test.research_batch --exchange bybit --candles 1500
 import argparse
 import csv
 import json
+from datetime import datetime, timedelta, timezone
+import math
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -42,11 +44,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--exchange", default="bybit")
     parser.add_argument("--candles", type=int, default=1500)
+    parser.add_argument("--days", type=int, default=None, help="Calendar days; overrides --candles")
     parser.add_argument("--output", default="research_output")
     parser.add_argument("--tokens", nargs="+", default=list(TOKENS))
     parser.add_argument("--timeframes", nargs="+", default=list(TIMEFRAMES))
     args = parser.parse_args()
-    if args.candles < 250:
+    if args.days is not None and args.days < 1:
+        parser.error("--days must be positive")
+    if args.days is None and args.candles < 250:
         parser.error("--candles must be >= 250 for indicator warmup")
     if any(tf not in TIMEFRAMES for tf in args.timeframes):
         parser.error("Supported timeframes: 1m, 5m, 15m")
@@ -56,6 +61,9 @@ def main():
     loader.exchange.load_markets()
     rows = []
     errors = []
+    # One common UTC end boundary for all tokens/timeframes.
+    end = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    start = end - timedelta(days=args.days) if args.days is not None else None
     for token in args.tokens:
         symbol = f"{token}/USDT:USDT"
         if symbol not in loader.exchange.markets:
@@ -63,7 +71,14 @@ def main():
             continue
         for tf in args.timeframes:
             try:
-                candles = loader.load_historical_candles(symbol, tf, args.candles)
+                minutes = int(tf[:-1])
+                required = (math.ceil(args.days * 1440 / minutes) + 250
+                            if args.days is not None else args.candles)
+                candles = loader.load_historical_candles(symbol, tf, required)
+                if start is not None:
+                    candles = [c for c in candles if c.timestamp < end]
+                    if not candles or candles[0].timestamp > start - timedelta(minutes=250 * minutes):
+                        raise ValueError("Insufficient history for 30-day window plus warmup")
                 if len(candles) < 220:
                     raise ValueError("Insufficient historical candles")
                 data = SimpleNamespace(symbol=symbol, candles_5m=candles,
@@ -77,16 +92,23 @@ def main():
                     name = strategy.name
                     prefix = folder / f"{token}_{tf}_{name}"
                     result.export(str(prefix))
-                    completed = [t for t in result.trades if t.exit_time is not None]
+                    completed = [t for t in result.trades if t.exit_time is not None
+                                 and (start is None or t.entry_time >= start)]
                     gross = sum(t.gross_pnl for t in completed)
                     fees = sum(t.fees for t in completed)
                     net = gross - fees
                     wins = sum(t.net_pnl > 0 for t in completed)
                     gross_wins = sum(t.gross_pnl > 0 for t in completed)
                     rows.append({
+                        "window_start_utc": start.isoformat() if start else "",
+                        "window_end_utc": end.isoformat() if start else "",
+                        "first_candle": candles[0].timestamp.isoformat(),
+                        "last_candle": candles[-1].timestamp.isoformat(),
                         "symbol": symbol, "timeframe": tf, "strategy": name,
-                        "signals": len(result.signals), "filled": len(result.trades),
-                        "closed": len(completed), "open": len(result.trades) - len(completed),
+                        "signals": sum(start is None or e["timestamp"] >= start for e in result.signals),
+                        "filled": sum(start is None or t.entry_time >= start for t in result.trades),
+                        "closed": len(completed), "open": sum(t.exit_time is None and
+                        (start is None or t.entry_time >= start) for t in result.trades),
                         "gross_wins": gross_wins, "net_wins": wins,
                         "gross_win_rate": round(100 * gross_wins / len(completed), 2) if completed else 0,
                         "net_win_rate": round(100 * wins / len(completed), 2) if completed else 0,
