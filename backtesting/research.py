@@ -78,7 +78,7 @@ class ResearchRunner:
         if not 0 < self.default_stop_percentage < 1 or self.breakout_expiry_candles < 1:
             raise ValueError("Invalid stop or expiry")
         RiskLimits(leverage=self.leverage)
-        if self.timeframe not in ("1m", "5m", "15m", "30m"):
+        if self.timeframe not in ("1m", "5m", "15m"):
             raise ValueError("Unsupported research timeframe")
         result = ResearchResult()
         pending = []
@@ -196,7 +196,7 @@ class ResearchRunner:
                     continue
                 if self.timeframe == "15m":
                     closed["15m"].append(candle)
-                elif self.timeframe in ("1m", "30m"):
+                elif self.timeframe in ("1m",):
                     closed[timeframe].append(candle)
                 candles = closed[timeframe]
                 index = len(candles) - 1
@@ -221,25 +221,26 @@ class ResearchRunner:
                             elif trade.side == "short" and candles[-1].close < new_stop < trade.stop_loss:
                                 trade.stop_loss = new_stop
                 for strategy in strategies[timeframe]:
-                    signal = strategy.generate_signal(candles, index)
-                    if signal is None:
-                        continue
-                    event = {"timestamp": close_time, "timeframe": timeframe,
-                             "strategy": signal.strategy, "side": signal.side.value,
-                             "reason": signal.reason,
-                             "diagnostics": dict(getattr(signal, "diagnostics", {}) or {}),
-                             "status": "pending"}
-                    result.signals.append(event)
-                    item = {"signal": signal, "timeframe": timeframe,
-                            "event": event, "age": 0}
-                    if signal.entry_timing == EntryTiming.CURRENT_CLOSE:
-                        fill(item, candle.close, close_time)
-                    elif signal.entry_timing in (EntryTiming.NEXT_OPEN, EntryTiming.BREAKOUT):
-                        pending.append(item)
-                    else:
-                        event["status"] = "unsupported"
-                        result.unfilled.append(event)
-        for item in pending:
+                    signals = (strategy.generate_signals(candles, index) if hasattr(strategy, "generate_signals") else [strategy.generate_signal(candles, index)])
+                    for signal in signals:
+                        if signal is None:
+                            continue
+                        event = {"timestamp": close_time, "timeframe": timeframe,
+                                 "strategy": signal.strategy, "side": signal.side.value,
+                                 "reason": signal.reason,
+                                 "diagnostics": dict(getattr(signal, "diagnostics", {}) or {}),
+                                 "status": "pending"}
+                        result.signals.append(event)
+                        item = {"signal": signal, "timeframe": timeframe,
+                                "event": event, "age": 0, "oco": (timeframe, strategy.name, close_time) if len(signals) > 1 else None}
+                        if signal.entry_timing == EntryTiming.CURRENT_CLOSE:
+                            fill(item, candle.close, close_time)
+                        elif signal.entry_timing in (EntryTiming.NEXT_OPEN, EntryTiming.BREAKOUT):
+                            pending.append(item)
+                        else:
+                            event["status"] = "unsupported"
+                            result.unfilled.append(event)
+            for item in pending:
             item["event"]["status"] = "end_of_data"
             result.unfilled.append(item["event"])
         return result
