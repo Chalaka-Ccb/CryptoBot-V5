@@ -68,6 +68,16 @@ class LiveEngine:
                     self.controls.lock("Trade ledger reconciliation failed")
                     self.recorder.event("ledger_error", level="ERROR", error_type=type(error).__name__)
                     return True
+                # Do not permit another entry while orphan orders may remain.
+                try:
+                    if self.exchange.get_open_orders() or self.exchange.get_protection():
+                        self.controls.lock("Orphan orders after position close; manual cleanup required")
+                        self.recorder.event("orphan_orders_detected", level="ERROR")
+                        return True
+                except Exception as error:
+                    self.controls.lock("Cannot verify orders after position close")
+                    self.recorder.event("orphan_check_failed", level="ERROR", error_type=type(error).__name__)
+                    return True
                 self.state["trade"] = None
                 self._save()
             return False

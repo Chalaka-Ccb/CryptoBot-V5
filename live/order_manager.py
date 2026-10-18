@@ -51,8 +51,10 @@ class OrderManager:
     def open_trade(self, plan):
         if self.controls.entries_blocked():
             raise RuntimeError("Entries blocked")
-        if self.exchange.get_position() is not None or self.exchange.get_protection():
-            raise RuntimeError("Position or contingent orders already present")
+        if (self.exchange.get_position() is not None
+                or self.exchange.get_open_orders()
+                or self.exchange.get_protection()):
+            raise RuntimeError("Position or existing orders already present")
         plan = replace(plan, client_order_id="cbv1-" + uuid.uuid4().hex[:24])
         self.recorder.event("entry_submit", side=plan.side, qty=plan.qty,
                             client_order_id=plan.client_order_id)
