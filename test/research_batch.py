@@ -133,4 +133,18 @@ def main():
 
 
 if __name__ == "__main__":
+    main()                    except Exception as exc:
+                        errors.append({"symbol": symbol, "timeframe": tf,
+                                       "strategy": strategy.name, "error": str(exc)})
+                        print(f"SKIPPED {symbol} {tf} {strategy.name}: {exc}")
+    if rows:
+        with (folder / "summary.csv").open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+    (folder / "errors.json").write_text(json.dumps(errors, indent=2), encoding="utf-8")
+    print(f"Finished: {len(rows)} strategy/timeframe results; {len(errors)} errors. See {folder}")
+
+
+if __name__ == "__main__":
     main()
