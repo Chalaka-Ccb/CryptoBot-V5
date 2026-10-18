@@ -176,6 +176,17 @@ class ChannelReboundStrategy:
                 trigger_price=current.high,
                 stop_loss=stop_loss,
                 take_profit=current_band.upper,
+                diagnostics={
+                    "adx": adx, "adx_threshold": self.config.adx_threshold,
+                    "rsi": rsi, "previous_rsi": previous_rsi,
+                    "rsi_oversold": oversold, "rsi_overbought": overbought,
+                    "bollinger_lower": current_band.lower,
+                    "bollinger_middle": current_band.middle,
+                    "bollinger_upper": current_band.upper,
+                    "candle_open": current.open, "candle_close": current.close,
+                    "candle_high": current.high, "candle_low": current.low,
+                    "band_touch_tolerance": self.config.band_touch_tolerance,
+                },
                 reason=(
                     "ADX below threshold (range or mild trend). "
                     "Price touched lower Bollinger Band, RSI "
@@ -224,6 +235,17 @@ class ChannelReboundStrategy:
                 trigger_price=current.low,
                 stop_loss=stop_loss,
                 take_profit=current_band.lower,
+                diagnostics={
+                    "adx": adx, "adx_threshold": self.config.adx_threshold,
+                    "rsi": rsi, "previous_rsi": previous_rsi,
+                    "rsi_oversold": oversold, "rsi_overbought": overbought,
+                    "bollinger_lower": current_band.lower,
+                    "bollinger_middle": current_band.middle,
+                    "bollinger_upper": current_band.upper,
+                    "candle_open": current.open, "candle_close": current.close,
+                    "candle_high": current.high, "candle_low": current.low,
+                    "band_touch_tolerance": self.config.band_touch_tolerance,
+                },
                 reason=(
                     "ADX below threshold (range or mild trend). "
                     "Price touched upper Bollinger Band, RSI "
