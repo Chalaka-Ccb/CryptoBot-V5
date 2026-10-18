@@ -1,28 +1,18 @@
 [Unit]
-Description=CryptoBot FFFD live trading
-Wants=network-online.target
+Description=CryptoBot V5 Bitget Channel Rebound
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=cryptobot
-Group=cryptobot
-WorkingDirectory=/opt/cryptobot
-EnvironmentFile=/etc/cryptobot/live.env
-Environment=PYTHONUNBUFFERED=1
-Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/cryptobot/.venv/bin/python -m engine.live_engine
-StateDirectory=cryptobot
-UMask=0077
+WorkingDirectory=/opt/CryptoBot-V5
+ExecStart=/opt/CryptoBot-V5/.venv/bin/python run_live.py
+Restart=on-failure
+RestartSec=10
 KillSignal=SIGTERM
-TimeoutStopSec=120
-# Uncertain submissions require inspection; do not restart blindly.
-Restart=no
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/cryptobot
+TimeoutStopSec=30
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
