@@ -212,7 +212,8 @@ class ResearchRunner:
                     result.unfilled.append(item["event"])
                     pending.remove(item)
 
-            closed["5m"].append(candle)
+            if self.timeframe == "5m":
+                closed["5m"].append(candle)
             fifteen_candle = fifteen.get(close_time) if self.timeframe == "5m" else None
             if fifteen_candle:
                 closed["15m"].append(fifteen_candle)
@@ -265,7 +266,7 @@ class ResearchRunner:
                         else:
                             event["status"] = "unsupported"
                             result.unfilled.append(event)
-            for item in pending:
+        for item in pending:
             item["event"]["status"] = "end_of_data"
             result.unfilled.append(item["event"])
         return result
