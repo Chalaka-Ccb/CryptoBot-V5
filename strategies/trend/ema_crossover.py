@@ -227,6 +227,10 @@ class EMACrossoverStrategy:
             trigger_price=entry_price,
             stop_loss=stop_loss,
             take_profit=None,
+            diagnostics={"fast_ema": current_fast, "slow_ema": current_slow,
+                         "previous_fast_ema": previous_fast, "previous_slow_ema": previous_slow,
+                         "volume": current.volume, "previous_volume_sma": preceding_volume_sma,
+                         "stop_mode": self.config.stop_mode},
             reason=(
                 "Fast EMA crossed below slow EMA, the candle "
                 "closed below the slow EMA, and volume was "
