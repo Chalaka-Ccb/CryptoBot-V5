@@ -199,6 +199,12 @@ class HiLoMACDStrategy:
             entry_timing=EntryTiming.NEXT_OPEN,
             trigger_price=close,
             stop_loss=stop_loss,
+            diagnostics={"hilo_line": current_hilo.line, "hilo_trend": str(current_hilo.trend),
+                         "macd_line": macd[index].macd_line,
+                         "macd_signal": macd[index].signal_line,
+                         "macd_histogram": macd[index].histogram,
+                         "cross_lookback": self.macd_cross_lookback,
+                         "cross_below_zero": self.macd_cross_below_zero},
             reason=(
                 "Price closed above the Hi-Lo Activator while the "
                 "MACD line crossed above its signal line beneath "
