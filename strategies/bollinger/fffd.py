@@ -523,6 +523,23 @@ class FFFDStrategy:
                 trigger_price=current.close,
                 stop_loss=stop_loss,
                 take_profit=current_band.middle,
+                diagnostics={
+                    "previous_close": previous.close,
+                    "current_close": current.close,
+                    "previous_band_lower": previous_band.lower,
+                    "previous_band_upper": previous_band.upper,
+                    "band_lower": current_band.lower,
+                    "band_middle": current_band.middle,
+                    "band_upper": current_band.upper,
+                    "min_band_penetration": self.min_band_penetration,
+                    "macd_exhaustion_enabled": self.use_macd_exhaustion,
+                    "liquidity_sweep_enabled": self.use_liquidity_sweep,
+                    "long_ema_filter_enabled": self.use_long_ema_filter,
+                    "short_ema_filter_enabled": self.use_short_ema_filter,
+                    "short_rsi_filter_enabled": self.use_short_rsi_filter,
+                    "min_reward_risk": self.min_reward_risk,
+                    "stop_mode": self.stop_mode,
+                },
                 reason=(
                     "Previous candle closed below the lower "
                     "Bollinger Band and the current candle closed "
@@ -593,6 +610,23 @@ class FFFDStrategy:
                 trigger_price=current.close,
                 stop_loss=stop_loss,
                 take_profit=current_band.middle,
+                diagnostics={
+                    "previous_close": previous.close,
+                    "current_close": current.close,
+                    "previous_band_lower": previous_band.lower,
+                    "previous_band_upper": previous_band.upper,
+                    "band_lower": current_band.lower,
+                    "band_middle": current_band.middle,
+                    "band_upper": current_band.upper,
+                    "min_band_penetration": self.min_band_penetration,
+                    "macd_exhaustion_enabled": self.use_macd_exhaustion,
+                    "liquidity_sweep_enabled": self.use_liquidity_sweep,
+                    "long_ema_filter_enabled": self.use_long_ema_filter,
+                    "short_ema_filter_enabled": self.use_short_ema_filter,
+                    "short_rsi_filter_enabled": self.use_short_rsi_filter,
+                    "min_reward_risk": self.min_reward_risk,
+                    "stop_mode": self.stop_mode,
+                },
                 reason=(
                     "Previous candle closed above the upper "
                     "Bollinger Band and the current candle closed "
