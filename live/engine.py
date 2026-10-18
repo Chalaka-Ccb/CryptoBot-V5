@@ -4,6 +4,7 @@ from datetime import timedelta, datetime, timezone
 from core.models.signal import EntryTiming, TradingSignal, SignalSide
 from backtesting.strategy_setup import create_strategy_coordinator
 from live.sizing import size_trade
+from live.ledger import closed_trade_record
 
 
 class LiveEngine:
@@ -45,6 +46,20 @@ class LiveEngine:
         if position is None:
             if saved:
                 self.recorder.event("position_closed", reason="exchange_flat", side=saved.get("side"))
+                try:
+                    if not saved.get("ledger_written"):
+                        record = closed_trade_record(saved, self.exchange.get_fills(saved.get("entry_ts")))
+                        if record is None:
+                            self.controls.lock("Closed trade fills or fees unresolved")
+                            self.recorder.event("ledger_unresolved", level="ERROR")
+                            return True
+                        self.recorder.trade_closed(**record)
+                        saved["ledger_written"] = True
+                        self._save()
+                except Exception as error:
+                    self.controls.lock("Trade ledger reconciliation failed")
+                    self.recorder.event("ledger_error", level="ERROR", error_type=type(error).__name__)
+                    return True
                 self.state["trade"] = None
                 self._save()
             return False
@@ -108,7 +123,9 @@ class LiveEngine:
             position = self.orders.open_trade(plan)
             if position is not None:
                 self.state["trade"] = {"side": position.side, "qty": position.qty,
-                                       "entry": position.entry, "sl": plan.sl, "tp": plan.tp}
+                                       "entry": position.entry, "sl": plan.sl, "tp": plan.tp,
+                                       "entry_ts": int(datetime.now(timezone.utc).timestamp() * 1000),
+                                       "timeframe": plan.timeframe, "symbol": self.cfg.symbol}
         finally:
             self.state["entry_in_flight"] = False
             self._save()
