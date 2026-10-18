@@ -16,6 +16,14 @@ class LiveEngine:
             if len(strategies) != 1 or strategies[0].name != "bollinger_channel_rebound":
                 raise RuntimeError("Only Channel Rebound may run in Live V1")
         self.state = self.store.load()
+        saved_symbol = self.state.get("symbol")
+        if saved_symbol and saved_symbol != cfg.symbol:
+            raise RuntimeError("Saved live state belongs to another symbol; use a separate DATA_DIR")
+        saved_trade = self.state.get("trade") or {}
+        if saved_trade.get("symbol") and saved_trade["symbol"] != cfg.symbol:
+            raise RuntimeError("Saved open trade belongs to another symbol")
+        self.state["symbol"] = cfg.symbol
+        self.store.save(self.state)
         self.running = True
 
     def stop(self):
