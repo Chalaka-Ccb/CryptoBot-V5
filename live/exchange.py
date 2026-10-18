@@ -105,6 +105,13 @@ class BitgetExchange:
         return self._call("fetch_open_orders", self.cfg.symbol, None, None,
                           {"trigger": True}, retry=True)
 
+    def get_fills(self, since=None):
+        """Read actual exchange fills for ledger reconciliation."""
+        return self._call("fetch_my_trades", self.cfg.symbol, since, 200, retry=True)
+
+    def get_open_orders(self):
+        return self._call("fetch_open_orders", self.cfg.symbol, retry=True)
+
     def place_entry(self, plan):
         self.cfg.require_trading_confirmation()
         params = {"marginMode": self.cfg.margin_mode,
