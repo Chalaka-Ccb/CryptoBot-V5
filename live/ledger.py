@@ -42,7 +42,7 @@ def closed_trade_record(saved, fills):
     timestamp = lambda ms: datetime.fromtimestamp(ms / 1000, timezone.utc).isoformat()
     return {
         "trade_id": saved.get("client_order_id", ""),
-        "symbol": saved.get("symbol", "SOL/USDT:USDT"),
+        "symbol": saved.get("symbol", "SONIC/USDT:USDT"),
         "strategy": "bollinger_channel_rebound",
         "timeframe": saved.get("timeframe", ""),
         "side": saved["side"],
