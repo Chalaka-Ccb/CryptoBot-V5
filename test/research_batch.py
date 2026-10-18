@@ -85,41 +85,45 @@ def main():
                                        candles_15m=candles,
                                        **({"candles_" + tf: candles} if tf in ("1m", "30m") else {}))
                 for strategy in strategies():
-                    coordinator = StrategyCoordinator(
-                        strategies_15m=[strategy] if tf == "15m" else [],
-                        strategies_5m=[strategy] if tf != "15m" else [])
-                    result = ResearchRunner(coordinator, timeframe=tf).run(data)
-                    name = strategy.name
-                    prefix = folder / f"{token}_{tf}_{name}"
-                    result.export(str(prefix))
-                    completed = [t for t in result.trades if t.exit_time is not None
-                                 and (start is None or t.entry_time >= start)]
-                    gross = sum(t.gross_pnl for t in completed)
-                    fees = sum(t.fees for t in completed)
-                    net = gross - fees
-                    wins = sum(t.net_pnl > 0 for t in completed)
-                    gross_wins = sum(t.gross_pnl > 0 for t in completed)
-                    rows.append({
-                        "window_start_utc": start.isoformat() if start else "",
-                        "window_end_utc": end.isoformat() if start else "",
-                        "first_candle": candles[0].timestamp.isoformat(),
-                        "last_candle": candles[-1].timestamp.isoformat(),
-                        "symbol": symbol, "timeframe": tf, "strategy": name,
-                        "signals": sum(start is None or e["timestamp"] >= start for e in result.signals),
-                        "filled": sum(start is None or t.entry_time >= start for t in result.trades),
-                        "closed": len(completed), "open": sum(t.exit_time is None and
-                        (start is None or t.entry_time >= start) for t in result.trades),
-                        "gross_wins": gross_wins, "net_wins": wins,
-                        "gross_win_rate": round(100 * gross_wins / len(completed), 2) if completed else 0,
-                        "net_win_rate": round(100 * wins / len(completed), 2) if completed else 0,
-                        "gross_pnl": round(gross, 4), "fees": round(fees, 4),
-                        "net_pnl": round(net, 4),
-                        "profit_factor_net": round(
-                            sum(max(0, t.net_pnl) for t in completed) /
-                            abs(sum(min(0, t.net_pnl) for t in completed)), 4)
-                            if any(t.net_pnl < 0 for t in completed) else None,
-                    })
-                    print(f"{symbol} {tf} {name}: {len(completed)} closed, net {net:.2f}")
+                    try:
+                        coordinator = StrategyCoordinator(
+                            strategies_15m=[strategy] if tf == "15m" else [],
+                            strategies_5m=[strategy] if tf != "15m" else [])
+                        result = ResearchRunner(coordinator, timeframe=tf).run(data)
+                        name = strategy.name
+                        prefix = folder / f"{token}_{tf}_{name}"
+                        result.export(str(prefix))
+                        completed = [t for t in result.trades if t.exit_time is not None
+                                     and (start is None or t.entry_time >= start)]
+                        gross = sum(t.gross_pnl for t in completed)
+                        fees = sum(t.fees for t in completed)
+                        net = gross - fees
+                        wins = sum(t.net_pnl > 0 for t in completed)
+                        gross_wins = sum(t.gross_pnl > 0 for t in completed)
+                        rows.append({
+                            "window_start_utc": start.isoformat() if start else "",
+                            "window_end_utc": end.isoformat() if start else "",
+                            "first_candle": candles[0].timestamp.isoformat(),
+                            "last_candle": candles[-1].timestamp.isoformat(),
+                            "symbol": symbol, "timeframe": tf, "strategy": name,
+                            "signals": sum(start is None or e["timestamp"] >= start for e in result.signals),
+                            "filled": sum(start is None or t.entry_time >= start for t in result.trades),
+                            "closed": len(completed), "open": sum(t.exit_time is None and
+                            (start is None or t.entry_time >= start) for t in result.trades),
+                            "gross_wins": gross_wins, "net_wins": wins,
+                            "gross_win_rate": round(100 * gross_wins / len(completed), 2) if completed else 0,
+                            "net_win_rate": round(100 * wins / len(completed), 2) if completed else 0,
+                            "gross_pnl": round(gross, 4), "fees": round(fees, 4),
+                            "net_pnl": round(net, 4),
+                            "profit_factor_net": round(
+                                sum(max(0, t.net_pnl) for t in completed) /
+                                abs(sum(min(0, t.net_pnl) for t in completed)), 4)
+                                if any(t.net_pnl < 0 for t in completed) else None,
+                        })
+                        print(f"{symbol} {tf} {name}: {len(completed)} closed, net {net:.2f}")
+                    except Exception as exc:
+                        errors.append({"symbol": symbol, "timeframe": tf, "strategy": strategy.name, "error": str(exc)})
+                        print(f"SKIPPED {symbol} {tf} {strategy.name}: {exc}")
             except Exception as exc:
                 errors.append({"symbol": symbol, "timeframe": tf, "error": str(exc)})
                 print(f"SKIPPED {symbol} {tf}: {exc}")
