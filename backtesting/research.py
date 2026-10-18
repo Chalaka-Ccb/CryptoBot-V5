@@ -70,6 +70,7 @@ class ResearchRunner:
     default_risk_reward: float = 3.0
     breakout_expiry_candles: int = 3
     fee_config: FeeConfig = field(default_factory=FeeConfig)
+    timeframe: str = "5m"
 
     def run(self, market_data):
         if self.reference_capital <= 0 or not 0 < self.risk_percentage <= 1:
@@ -77,13 +78,19 @@ class ResearchRunner:
         if not 0 < self.default_stop_percentage < 1 or self.breakout_expiry_candles < 1:
             raise ValueError("Invalid stop or expiry")
         RiskLimits(leverage=self.leverage)
+        if self.timeframe not in ("1m", "5m", "15m", "30m"):
+            raise ValueError("Unsupported research timeframe")
         result = ResearchResult()
         pending = []
         active = []
         closed = {"5m": [], "15m": []}
+        if self.timeframe != "5m":
+            closed = {self.timeframe: []}
         fifteen = {c.timestamp + timedelta(minutes=15): c for c in market_data.candles_15m}
         strategies = {"5m": self.strategy_coordinator.strategies_5m,
                       "15m": self.strategy_coordinator.strategies_15m}
+        if self.timeframe != "5m":
+            strategies = {self.timeframe: self.strategy_coordinator.strategies_5m}
         next_id = 0
 
         def fill(item, price, timestamp):
@@ -145,8 +152,12 @@ class ResearchRunner:
                 else: return
             close_trade(trade, price, candle.timestamp, why)
 
-        for candle in market_data.candles_5m:
-            close_time = candle.timestamp + timedelta(minutes=5)
+        step = timedelta(minutes=int(self.timeframe[:-1]))
+        source = (market_data.candles_5m if self.timeframe == "5m"
+                  else market_data.candles_15m if self.timeframe == "15m"
+                  else getattr(market_data, "candles_" + self.timeframe))
+        for candle in source:
+            close_time = candle.timestamp + step
             for item in list(pending):
                 if item["signal"].entry_timing == EntryTiming.NEXT_OPEN:
                     fill(item, candle.open, candle.timestamp)
@@ -177,12 +188,16 @@ class ResearchRunner:
                     pending.remove(item)
 
             closed["5m"].append(candle)
-            fifteen_candle = fifteen.get(close_time)
+            fifteen_candle = fifteen.get(close_time) if self.timeframe == "5m" else None
             if fifteen_candle:
                 closed["15m"].append(fifteen_candle)
-            for timeframe in ("15m", "5m"):
-                if timeframe == "15m" and not fifteen_candle:
+            for timeframe in (("15m", "5m") if self.timeframe == "5m" else (self.timeframe,)):
+                if timeframe == "15m" and self.timeframe == "5m" and not fifteen_candle:
                     continue
+                if self.timeframe == "15m":
+                    closed["15m"].append(candle)
+                elif self.timeframe in ("1m", "30m"):
+                    closed[timeframe].append(candle)
                 candles = closed[timeframe]
                 index = len(candles) - 1
                 for trade in list(active):
