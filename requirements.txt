@@ -1,1 +1,1 @@
--r requrements.txt
+ccxt==4.5.84

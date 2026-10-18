@@ -1,1 +1,1 @@
-"""Live V1 package; real trading is not enabled by this package."""
+"""Bitget live execution package. Real orders require explicit opt-in."""
