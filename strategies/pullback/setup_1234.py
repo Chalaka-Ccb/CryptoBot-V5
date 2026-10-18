@@ -291,6 +291,13 @@ class Setup1234Strategy:
                 stop_loss,
                 SignalSide.LONG,
             ),
+            diagnostics={"point_1_index": point_1, "point_2_index": point_2,
+                         "point_3_index": point_3, "pivot_strength": strength,
+                         "trend_filter": str(self.config.trend_filter),
+                         "trend_value": self._trend_values[index] if self._trend_values else None,
+                         "point_1_high": candles[point_1].high, "point_1_low": candles[point_1].low,
+                         "point_2_high": candles[point_2].high, "point_2_low": candles[point_2].low,
+                         "point_3_high": candles[point_3].high, "point_3_low": candles[point_3].low},
             reason=(
                 "Bullish 1-2-3-4 reversal: higher low at Point 3 "
                 "above the Point 1 low; buy stop above the "
@@ -367,6 +374,13 @@ class Setup1234Strategy:
                 stop_loss,
                 SignalSide.SHORT,
             ),
+            diagnostics={"point_1_index": point_1, "point_2_index": point_2,
+                         "point_3_index": point_3, "pivot_strength": strength,
+                         "trend_filter": str(self.config.trend_filter),
+                         "trend_value": self._trend_values[index] if self._trend_values else None,
+                         "point_1_high": candles[point_1].high, "point_1_low": candles[point_1].low,
+                         "point_2_high": candles[point_2].high, "point_2_low": candles[point_2].low,
+                         "point_3_high": candles[point_3].high, "point_3_low": candles[point_3].low},
             reason=(
                 "Bearish 1-2-3-4 reversal: lower high at Point 3 "
                 "below the Point 1 high; sell stop below the "
