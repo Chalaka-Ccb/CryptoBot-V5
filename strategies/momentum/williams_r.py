@@ -253,6 +253,11 @@ class WilliamsRStrategy:
             entry_timing=entry_timing,
             trigger_price=trigger_price,
             stop_loss=stop_loss,
+            diagnostics={"williams_r_previous": previous_value,
+                         "williams_r_current": current_value,
+                         "ema200": current_ema, "previous_ema200": previous_ema,
+                         "atr": current_atr, "atr_multiplier": atr_multiplier,
+                         "volume_ratio": volume_result.volume_ratio},
             reason=(
                 "Williams %R recovered above "
                 f"{self.config.oversold}; "
