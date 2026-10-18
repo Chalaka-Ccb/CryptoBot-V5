@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
+from dataclasses import field
 
 
 class SignalSide(str, Enum):
@@ -29,3 +30,4 @@ class TradingSignal:
     take_profit: Optional[float] = None
 
     reason: str = ""
+    diagnostics: dict = field(default_factory=dict)
