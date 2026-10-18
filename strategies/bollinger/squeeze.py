@@ -168,6 +168,13 @@ class BollingerSqueezeStrategy:
                 entry_timing=EntryTiming.BREAKOUT,
                 trigger_price=current.high,
                 stop_loss=current_band.middle,
+                diagnostics={"previous_bandwidth": previous_band.bandwidth,
+                             "current_bandwidth": current_band.bandwidth,
+                             "minimum_bandwidth": minimum_bandwidth,
+                             "volume": current.volume, "preceding_volume_sma": preceding_volume_sma,
+                             "previous_upper_band": previous_band.upper,
+                             "previous_lower_band": previous_band.lower,
+                             "current_middle_band": current_band.middle},
                 reason=(
                     "Bollinger squeeze followed by "
                     "bullish close above the narrowed upper band "
@@ -192,6 +199,13 @@ class BollingerSqueezeStrategy:
                 entry_timing=EntryTiming.BREAKOUT,
                 trigger_price=current.low,
                 stop_loss=current_band.middle,
+                diagnostics={"previous_bandwidth": previous_band.bandwidth,
+                             "current_bandwidth": current_band.bandwidth,
+                             "minimum_bandwidth": minimum_bandwidth,
+                             "volume": current.volume, "preceding_volume_sma": preceding_volume_sma,
+                             "previous_upper_band": previous_band.upper,
+                             "previous_lower_band": previous_band.lower,
+                             "current_middle_band": current_band.middle},
                 reason=(
                     "Bollinger squeeze followed by "
                     "bearish close below the narrowed lower band "
