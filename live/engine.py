@@ -116,6 +116,7 @@ class LiveEngine:
             self._save()
             return
         # Persist an entry-in-flight marker before exchange side effects.
+        entry_sent_at = int(datetime.now(timezone.utc).timestamp() * 1000)
         self.state["pending"] = None
         self.state["entry_in_flight"] = True
         self._save()
@@ -124,7 +125,7 @@ class LiveEngine:
             if position is not None:
                 self.state["trade"] = {"side": position.side, "qty": position.qty,
                                        "entry": position.entry, "sl": plan.sl, "tp": plan.tp,
-                                       "entry_ts": int(datetime.now(timezone.utc).timestamp() * 1000),
+                                       "entry_ts": entry_sent_at,
                                        "timeframe": plan.timeframe, "symbol": self.cfg.symbol}
         finally:
             self.state["entry_in_flight"] = False
