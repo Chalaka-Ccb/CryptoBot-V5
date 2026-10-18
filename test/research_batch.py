@@ -19,7 +19,7 @@ from backtesting.strategy_setup import (
 
 TOKENS = ("SOL", "XRP", "BGB", "PI", "POL", "SONIC", "OP",
           "USUAL", "DOGE", "APY", "SUI")
-TIMEFRAMES = ("1m", "5m", "15m", "30m")
+TIMEFRAMES = ("1m", "5m", "15m")
 
 
 def strategies():
@@ -49,7 +49,7 @@ def main():
     if args.candles < 250:
         parser.error("--candles must be >= 250 for indicator warmup")
     if any(tf not in TIMEFRAMES for tf in args.timeframes):
-        parser.error("Supported timeframes: 1m, 5m, 15m, 30m")
+        parser.error("Supported timeframes: 1m, 5m, 15m")
     folder = Path(args.output)
     folder.mkdir(parents=True, exist_ok=True)
     loader = ExchangeDataLoader(args.exchange, "swap")
