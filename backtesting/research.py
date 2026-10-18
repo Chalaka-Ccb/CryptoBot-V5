@@ -90,7 +90,7 @@ class ResearchRunner:
         strategies = {"5m": self.strategy_coordinator.strategies_5m,
                       "15m": self.strategy_coordinator.strategies_15m}
         if self.timeframe != "5m":
-            strategies = {self.timeframe: self.strategy_coordinator.strategies_5m}
+            strategies = {self.timeframe: (self.strategy_coordinator.strategies_15m if self.timeframe == "15m" else self.strategy_coordinator.strategies_5m)}
         next_id = 0
 
         def fill(item, price, timestamp):
@@ -184,6 +184,8 @@ class ResearchRunner:
                             result.unfilled.append(item["event"])
                             pending.remove(item)
             for item in list(pending):
+                if not any(existing is item for existing in pending):
+                    continue
                 signal = item["signal"]
                 if signal.entry_timing != EntryTiming.BREAKOUT:
                     continue
