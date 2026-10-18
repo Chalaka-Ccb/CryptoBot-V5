@@ -19,7 +19,7 @@ def _dotenv(path=".env"):
 
 @dataclass(frozen=True)
 class LiveConfig:
-    symbol: str = "SOL/USDT:USDT"
+    symbol: str = "SONIC/USDT:USDT"
     risk_percentage: float = 0.05
     leverage: int = 12
     margin_mode: str = "isolated"
@@ -70,8 +70,8 @@ class LiveConfig:
         return cfg
 
     def validate(self):
-        if self.symbol != "SOL/USDT:USDT":
-            raise ValueError("Live V1 is restricted to SOL/USDT:USDT")
+        if self.symbol != "SONIC/USDT:USDT":
+            raise ValueError("Live V1 is restricted to SONIC/USDT:USDT")
         if not 0 < self.risk_percentage <= 0.05:
             raise ValueError("Risk must be >0 and <= 5%")
         if not 1 <= self.leverage <= 12:
