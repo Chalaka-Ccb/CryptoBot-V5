@@ -164,6 +164,25 @@ class ResearchRunner:
                     pending.remove(item)
             for trade in list(active):
                 process(trade, candle)
+            # NR7 OCO: never infer the order of two intrabar triggers from OHLC.
+            groups = {}
+            for item in pending:
+                if item.get("oco") is not None:
+                    groups.setdefault(item["oco"], []).append(item)
+            for siblings in groups.values():
+                hits = [item for item in siblings if item["signal"].trigger_price is not None and
+                        ((item["signal"].side == SignalSide.LONG and candle.high >= item["signal"].trigger_price) or
+                         (item["signal"].side == SignalSide.SHORT and candle.low <= item["signal"].trigger_price))]
+                if len(hits) > 1:
+                    at_open = [item for item in hits if
+                               ((item["signal"].side == SignalSide.LONG and candle.open >= item["signal"].trigger_price) or
+                                (item["signal"].side == SignalSide.SHORT and candle.open <= item["signal"].trigger_price))]
+                    keep = at_open[0] if len(at_open) == 1 else None
+                    for item in siblings:
+                        if item is not keep:
+                            item["event"]["status"] = "oco_cancelled" if keep else "ambiguous_oco"
+                            result.unfilled.append(item["event"])
+                            pending.remove(item)
             for item in list(pending):
                 signal = item["signal"]
                 if signal.entry_timing != EntryTiming.BREAKOUT:
@@ -178,6 +197,12 @@ class ResearchRunner:
                              else min(candle.open, trigger))
                     trade = fill(item, price, candle.timestamp)
                     pending.remove(item)
+                    if item.get("oco") is not None:
+                        for sibling in list(pending):
+                            if sibling.get("oco") == item["oco"]:
+                                sibling["event"]["status"] = "oco_cancelled"
+                                result.unfilled.append(sibling["event"])
+                                pending.remove(sibling)
                     if trade is not None:
                         process(trade, SimpleNamespace(timestamp=close_time, open=price,
                                                        high=candle.high, low=candle.low,
