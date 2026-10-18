@@ -98,6 +98,11 @@ class NR7Strategy:
             trigger_price=long_trigger,
             stop_loss=long_stop,
             take_profit=None,
+            diagnostics={"nr7_range": current_range, "minimum_range": minimum_range,
+                         "window_ranges": ranges, "lookback": self.config.lookback,
+                         "signal_high": current.high, "signal_low": current.low,
+                         "trigger_offset": self.config.trigger_offset,
+                         "stop_buffer": self.config.stop_buffer, "oco_pair": True},
             reason=(
                 "NR7 detected. Buy-stop above NR7 candle high."
             ),
@@ -125,6 +130,11 @@ class NR7Strategy:
             trigger_price=short_trigger,
             stop_loss=short_stop,
             take_profit=None,
+            diagnostics={"nr7_range": current_range, "minimum_range": minimum_range,
+                         "window_ranges": ranges, "lookback": self.config.lookback,
+                         "signal_high": current.high, "signal_low": current.low,
+                         "trigger_offset": self.config.trigger_offset,
+                         "stop_buffer": self.config.stop_buffer, "oco_pair": True},
             reason=(
                 "NR7 detected. Sell-stop below NR7 candle low."
             ),
