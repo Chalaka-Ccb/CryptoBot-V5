@@ -16,8 +16,6 @@ class BacktestMarketData:
 
         if self.candles_1m:
             times.append(self.candles_1m[0].timestamp)
-        if self.candles_1m:
-            times.append(self.candles_1m[-1].timestamp)
         if self.candles_15m:
             times.append(self.candles_15m[0].timestamp)
 
@@ -29,6 +27,8 @@ class BacktestMarketData:
     @property
     def end_time(self):
         times = []
+        if self.candles_1m:
+            times.append(self.candles_1m[-1].timestamp)
 
         if self.candles_15m:
             times.append(self.candles_15m[-1].timestamp)
