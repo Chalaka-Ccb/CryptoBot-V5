@@ -202,16 +202,7 @@ class Setup1234Strategy:
 
         self._ensure_trend_values(candles)
 
-        signal = self._bullish_signal(
-            candles,
-            index,
-            point_3,
-            window_start,
-        )
-
-        if signal is not None:
-            return signal
-
+        # Baseline experiment: short signals only.
         if self.config.enable_short:
             return self._bearish_signal(
                 candles,
