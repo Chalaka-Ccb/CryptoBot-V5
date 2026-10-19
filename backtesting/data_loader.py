@@ -222,8 +222,20 @@ class ExchangeDataLoader:
             self,
             symbol: str,
             candles: int = 2500,
+            timeframe: str = "5m",
     ) -> BacktestMarketData:
 
+        if timeframe not in ("1m", "5m", "15m"):
+            raise ValueError("Unsupported timeframe")
+        selected = self.load_historical_candles(symbol, timeframe, candles)
+        return BacktestMarketData(
+            symbol=symbol,
+            candles_15m=selected if timeframe == "15m" else [],
+            candles_5m=selected if timeframe == "5m" else [],
+            candles_1m=selected if timeframe == "1m" else [],
+        )
+
+    def load_multi_timeframe_market_data(self, symbol: str, candles: int = 2500) -> BacktestMarketData:
         candles_15m = self.load_historical_candles(
             symbol=symbol,
             timeframe="15m",
