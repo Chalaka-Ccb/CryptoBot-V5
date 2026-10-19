@@ -27,6 +27,7 @@ class BacktestRunner:
 
     # Number of future 5m candles allowed for breakout.
     breakout_expiry_candles: int = 3
+    timeframe: str = '5m'
 
     @staticmethod
     def _convert_trade(trade) -> BacktestTrade:
@@ -146,10 +147,12 @@ class BacktestRunner:
                 "breakout_expiry_candles must be >= 1"
             )
 
-        if not market_data.candles_5m:
-            raise ValueError(
-                "5m execution candles are required"
-            )
+        if self.timeframe not in ("1m", "5m", "15m"):
+            raise ValueError("Unsupported timeframe")
+        execution_candles = getattr(market_data, "candles_" + self.timeframe)
+        if not execution_candles:
+            raise ValueError("No execution candles")
+        minutes = int(self.timeframe[:-1])
 
         symbol = market_data.symbol
 
@@ -176,10 +179,7 @@ class BacktestRunner:
             default_stop_percentage=self.default_stop_percentage,
         )
 
-        closed_candles = {
-            "15m": [],
-            "5m": [],
-        }
+        closed_candles = {"15m": [], "5m": [], "1m": []}
 
         # Index 15m candles by their closing time.
         fifteen_by_close = {
@@ -199,14 +199,14 @@ class BacktestRunner:
         print(f"Symbol: {symbol}")
         print(f"Start: {market_data.start_time}")
         print(f"End: {market_data.end_time}")
-        print(f"5m execution candles: {len(market_data.candles_5m)}")
+        print(f"{self.timeframe} execution candles: {len(execution_candles)}")
         print(f"Default SL: {self.default_stop_percentage * 100:.2f}%")
         print(f"Default RR: {self.default_risk_reward}:1")
 
-        for candle in market_data.candles_5m:
+        for candle in execution_candles:
 
             open_time = candle.timestamp
-            close_time = open_time + timedelta(minutes=5)
+            close_time = open_time + timedelta(minutes=minutes)
 
             # -----------------------------------------
             # 1. FILL NEXT_OPEN AT 5M OPEN
@@ -327,51 +327,11 @@ class BacktestRunner:
             # 4. CLOSE 5M CANDLE
             # -----------------------------------------
 
-            closed_candles["5m"].append(candle)
-
-            # -----------------------------------------
-            # 5. CLOSE 15M CANDLE IF AVAILABLE
-            # -----------------------------------------
-
-            fifteen_closed = (
-                fifteen_by_close.get(close_time)
-            )
-
-            if fifteen_closed is not None:
-                closed_candles["15m"].append(
-                    fifteen_closed
-                )
-
-            # -----------------------------------------
-            # 6. STRATEGY EXITS
-            # -----------------------------------------
-
-            # 15m strategy exits first when a 15m
-            # candle closes at this boundary.
-
-            if fifteen_closed is not None:
-                closed_trade = self._manage_strategy_exit(
-                    broker=broker,
-                    symbol=symbol,
-                    timeframe="15m",
-                    closed_candles=closed_candles,
-                    trade_timeframes=trade_timeframes,
-                    timestamp=close_time,
-                )
-
-                if closed_trade is not None:
-                    completed_trades.append(closed_trade)
-
-            # 5m strategy exits.
+            closed_candles[self.timeframe].append(candle)
             closed_trade = self._manage_strategy_exit(
-                broker=broker,
-                symbol=symbol,
-                timeframe="5m",
-                closed_candles=closed_candles,
-                trade_timeframes=trade_timeframes,
-                timestamp=close_time,
+                broker, symbol, self.timeframe, closed_candles,
+                trade_timeframes, close_time,
             )
-
             if closed_trade is not None:
                 completed_trades.append(closed_trade)
 
@@ -389,26 +349,13 @@ class BacktestRunner:
             # 8. EVALUATE 15M FIRST, THEN 5M
             # -----------------------------------------
 
-            evaluation = None
-
-            if fifteen_closed is not None:
-                evaluation = (
-                    self.strategy_coordinator.evaluate(
-                        candles_15m=closed_candles["15m"],
-                        candles_5m=[],
-                    )
-                )
-
-            if (
-                evaluation is None
-                or evaluation.signal is None
-            ):
-                evaluation = (
-                    self.strategy_coordinator.evaluate(
-                        candles_15m=[],
-                        candles_5m=closed_candles["5m"],
-                    )
-                )
+            from engine.strategy_coordinator import StrategyEvaluation
+            strategies = (self.strategy_coordinator.strategies_15m
+                          if self.timeframe == "15m"
+                          else self.strategy_coordinator.strategies_5m)
+            found = self.strategy_coordinator._evaluate_strategies(
+                strategies, closed_candles[self.timeframe])
+            evaluation = StrategyEvaluation(self.timeframe, found)
 
             signal = evaluation.signal
 
@@ -439,10 +386,7 @@ class BacktestRunner:
 
             if signal.entry_timing == EntryTiming.CURRENT_CLOSE:
 
-                trade = execution.execute_current_close(
-                    pending=pending,
-                    candle=candle,
-                )
+                trade = execution.execute_entry(pending, candle.close, close_time)
 
                 if trade is not None:
                     trade_timeframes[trade.trade_id] = (
