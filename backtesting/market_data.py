@@ -8,11 +8,16 @@ class BacktestMarketData:
     symbol: str
     candles_15m: list[Candle]
     candles_5m: list[Candle]
+    candles_1m: list[Candle] | None = None
 
     @property
     def start_time(self):
         times = []
 
+        if self.candles_1m:
+            times.append(self.candles_1m[0].timestamp)
+        if self.candles_1m:
+            times.append(self.candles_1m[-1].timestamp)
         if self.candles_15m:
             times.append(self.candles_15m[0].timestamp)
 
