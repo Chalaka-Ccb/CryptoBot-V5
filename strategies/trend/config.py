@@ -15,3 +15,7 @@ class MovingAverageCrossoverConfig:
     swing_lookback: int = 5
 
     stop_buffer: float = 0.0
+    # Optional trend-strength entry filter.
+    use_adx_filter: bool = True
+    adx_period: int = 14
+    min_adx: float = 25.0
