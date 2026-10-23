@@ -14,7 +14,7 @@ def main():
 
     market_data = loader.load_market_data(
         symbol="SOL/USDT:USDT",
-        candles=3500,
+        candles=14 * 24 * 4 + 1,  # ~14 days of 15m bars; loader also fetches 5m bars
     )
 
     coordinator = create_strategy_coordinator()
