@@ -16,6 +16,11 @@ class MovingAverageCrossoverConfig:
 
     stop_buffer: float = 0.0
     # Optional trend-strength entry filter.
-    use_adx_filter: bool = True
+    use_adx_filter: bool = False
     adx_period: int = 14
     min_adx: float = 25.0
+
+    # Independent long/short macro-trend entry filters.
+    ema_trend_period: int = 200
+    use_long_ema_filter: bool = True
+    use_short_ema_filter: bool = True
