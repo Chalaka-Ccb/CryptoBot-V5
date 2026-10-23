@@ -4,6 +4,7 @@ from core.models.signal import (
     SignalSide,
     TradingSignal,
 )
+from indicators.adx import calculate_adx
 from indicators.ema import calculate_ema
 from indicators.volume import calculate_volume_sma
 from strategies.trend.config import MovingAverageCrossoverConfig
@@ -69,10 +70,16 @@ class EMACrossoverStrategy:
                 f"Unsupported stop_mode: {self.config.stop_mode}"
             )
 
+        if self.config.adx_period <= 0:
+            raise ValueError('adx_period must be positive')
+        if not 0 <= self.config.min_adx <= 100:
+            raise ValueError('min_adx must be between 0 and 100')
+
         self._cache_key: tuple[int, int] | None = None
         self._fast_ema: list[float | None] = []
         self._slow_ema: list[float | None] = []
         self._volume_sma: list[float | None] = []
+        self._adx: list[float | None] = []
 
     def _indicators(self, candles: list[Candle]):
         """
@@ -96,6 +103,8 @@ class EMACrossoverStrategy:
                 candles,
                 self.config.volume_period,
             )
+            if self.config.use_adx_filter:
+                self._adx = calculate_adx(candles, self.config.adx_period)
             self._cache_key = key
 
         return self._fast_ema, self._slow_ema, self._volume_sma
@@ -151,6 +160,12 @@ class EMACrossoverStrategy:
 
         if not crossed_above and not crossed_below:
             return None
+
+        # Optional ADX entry filter; original crossover and exits unchanged.
+        if self.config.use_adx_filter:
+            adx_value = self._adx[index]
+            if adx_value is None or adx_value < self.config.min_adx:
+                return None
 
         # ---------------------------------------------------------
         # Volume confirmation (preceding average, excludes this candle)
