@@ -52,8 +52,17 @@ class BollingerSqueezeStrategy:
 
     name = "bollinger_squeeze"
 
-    def __init__(self, config: BollingerConfig | None = None):
+    def __init__(
+        self,
+        config: BollingerConfig | None = None,
+        use_body_filter: bool = True,
+        min_body_ratio: float = 0.60,
+    ):
+        if not 0.0 <= min_body_ratio <= 1.0:
+            raise ValueError("min_body_ratio must be between 0 and 1")
         self.config = config or BollingerConfig()
+        self.use_body_filter = use_body_filter
+        self.min_body_ratio = min_body_ratio
         self._cache_key: tuple[int, int] | None = None
         self._bands = []
         self._volume_sma = []
@@ -151,6 +160,15 @@ class BollingerSqueezeStrategy:
         if not high_volume:
             return None
 
+        # Filter weak breakout bodies without changing risk or execution.
+        candle_range = current.high - current.low
+        body_ratio = (
+            abs(current.close - current.open) / candle_range
+            if candle_range > 0 else 0.0
+        )
+        if self.use_body_filter and body_ratio < self.min_body_ratio:
+            return None
+
         # -----------------------------------
         # Bullish breakout (outside the narrowed envelope)
         # -----------------------------------
@@ -159,7 +177,9 @@ class BollingerSqueezeStrategy:
             current.close > previous_band.upper
         )
 
-        if bullish_breakout:
+        if bullish_breakout and (
+            not self.use_body_filter or current.close > current.open
+        ):
 
             return TradingSignal(
                 strategy=self.name,
@@ -190,7 +210,9 @@ class BollingerSqueezeStrategy:
             current.close < previous_band.lower
         )
 
-        if bearish_breakout:
+        if bearish_breakout and (
+            not self.use_body_filter or current.close < current.open
+        ):
 
             return TradingSignal(
                 strategy=self.name,
