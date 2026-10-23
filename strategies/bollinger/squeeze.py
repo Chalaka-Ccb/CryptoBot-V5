@@ -7,6 +7,7 @@ from core.models.signal import (
 
 from indicators.bollinger_bands import calculate_bollinger_bands
 from indicators.volume import calculate_volume_sma
+from indicators.ema import calculate_ema
 
 from strategies.bollinger.config import BollingerConfig
 
@@ -55,17 +56,24 @@ class BollingerSqueezeStrategy:
     def __init__(
         self,
         config: BollingerConfig | None = None,
-        use_body_filter: bool = True,
+        use_body_filter: bool = False,
+        use_ema_filter: bool = True,
+        ema_period: int = 200,
         min_body_ratio: float = 0.60,
     ):
         if not 0.0 <= min_body_ratio <= 1.0:
             raise ValueError("min_body_ratio must be between 0 and 1")
+        if ema_period <= 0:
+            raise ValueError("ema_period must be positive")
+        self.use_ema_filter = use_ema_filter
+        self.ema_period = ema_period
         self.config = config or BollingerConfig()
         self.use_body_filter = use_body_filter
         self.min_body_ratio = min_body_ratio
         self._cache_key: tuple[int, int] | None = None
         self._bands = []
         self._volume_sma = []
+        self._ema_values = []
 
     def _indicators(self, candles: list[Candle]):
         """
@@ -86,6 +94,7 @@ class BollingerSqueezeStrategy:
                 candles,
                 period=self.config.squeeze_volume_period,
             )
+            self._ema_values = calculate_ema(candles, period=self.ema_period) if self.use_ema_filter else []
             self._cache_key = key
 
         return self._bands, self._volume_sma
@@ -178,6 +187,11 @@ class BollingerSqueezeStrategy:
         )
 
         if bullish_breakout and (
+            not self.use_ema_filter or (
+                self._ema_values[index] is not None
+                and current.close > self._ema_values[index]
+            )
+        ) and (
             not self.use_body_filter or current.close > current.open
         ):
 
@@ -211,6 +225,11 @@ class BollingerSqueezeStrategy:
         )
 
         if bearish_breakout and (
+            not self.use_ema_filter or (
+                self._ema_values[index] is not None
+                and current.close < self._ema_values[index]
+            )
+        ) and (
             not self.use_body_filter or current.close < current.open
         ):
 
