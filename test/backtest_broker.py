@@ -9,7 +9,7 @@ from strategies.pullback.setup_1234 import Setup1234Strategy
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--timeframe", choices=("1m", "5m", "15m"), default="5m")
-    parser.add_argument("--symbol", default="SOL/USDT:USDT")
+    parser.add_argument("--symbol", default="SONIC/USDT:USDT")
     parser.add_argument("--candles", type=int, default=3500)
     parser.add_argument("--risk", type=float, default=0.02)
     args = parser.parse_args()
