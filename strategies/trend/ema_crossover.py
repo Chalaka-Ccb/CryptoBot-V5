@@ -5,6 +5,7 @@ from core.models.signal import (
     TradingSignal,
 )
 from indicators.adx import calculate_adx
+from indicators.atr import calculate_atr
 from indicators.ema import calculate_ema
 from indicators.volume import calculate_volume_sma
 from strategies.trend.config import MovingAverageCrossoverConfig
@@ -57,7 +58,7 @@ class EMACrossoverStrategy:
 
     name = "ema_8_21_crossover"
 
-    _STOP_MODES = ("ema21", "recent_swing_low")
+    _STOP_MODES = ("ema21", "recent_swing_low", "atr")
 
     def __init__(
         self,
@@ -78,12 +79,18 @@ class EMACrossoverStrategy:
         if self.config.ema_trend_period <= 0:
             raise ValueError('ema_trend_period must be positive')
 
+        if self.config.atr_period <= 0:
+            raise ValueError("atr_period must be positive")
+        if self.config.atr_multiplier <= 0:
+            raise ValueError("atr_multiplier must be positive")
+
         self._cache_key: tuple[int, int] | None = None
         self._fast_ema: list[float | None] = []
         self._slow_ema: list[float | None] = []
         self._volume_sma: list[float | None] = []
         self._adx: list[float | None] = []
         self._trend_ema: list[float | None] = []
+        self._atr: list[float | None] = []
 
     def _indicators(self, candles: list[Candle]):
         """
@@ -111,6 +118,8 @@ class EMACrossoverStrategy:
                 self._adx = calculate_adx(candles, self.config.adx_period)
             if self.config.use_long_ema_filter or self.config.use_short_ema_filter:
                 self._trend_ema = calculate_ema(candles, self.config.ema_trend_period)
+            if self.config.stop_mode == "atr":
+                self._atr = calculate_atr(candles, self.config.atr_period)
             self._cache_key = key
 
         return self._fast_ema, self._slow_ema, self._volume_sma
@@ -278,6 +287,15 @@ class EMACrossoverStrategy:
         ema21: float,
         side: SignalSide = SignalSide.LONG,
     ) -> float:
+
+        if self.config.stop_mode == "atr":
+            atr_value = self._atr[index]
+            if atr_value is None or atr_value <= 0:
+                return float("inf") if side == SignalSide.LONG else float("-inf")
+            distance = atr_value * self.config.atr_multiplier
+            if side == SignalSide.LONG:
+                return candles[index].close - distance
+            return candles[index].close + distance
 
         if self.config.stop_mode == "ema21":
             if side == SignalSide.LONG:
