@@ -13,7 +13,7 @@ def main():
     )
 
     market_data = loader.load_market_data(
-        symbol="SOL/USDT:USDT",
+        symbol="XRP/USDT:USDT",
         candles=14 * 24 * 4 + 1,  # ~14 days of 15m bars; loader also fetches 5m bars
     )
 
