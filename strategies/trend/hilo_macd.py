@@ -63,6 +63,7 @@ class HiLoMACDStrategy:
         use_macd_histogram_strength_filter: bool = False,
         histogram_strength_lookback: int = 20,
         histogram_strength_ratio: float = 0.5,
+        use_macd_histogram_turn: bool = False,
     ):
         if macd_cross_lookback < 1:
             raise ValueError("macd_cross_lookback must be at least 1")
@@ -89,6 +90,7 @@ class HiLoMACDStrategy:
             raise ValueError("ATR periods must be positive")
         if histogram_strength_lookback < 1 or histogram_strength_ratio < 0:
             raise ValueError("Histogram strength parameters must be non-negative, with lookback >= 1")
+        self.use_macd_histogram_turn = use_macd_histogram_turn
         self.use_macd_histogram_strength_filter = use_macd_histogram_strength_filter
         self.histogram_strength_lookback = histogram_strength_lookback
         self.histogram_strength_ratio = histogram_strength_ratio
@@ -217,6 +219,23 @@ class HiLoMACDStrategy:
             if current_macd.histogram <= 0 or current_macd.histogram < self.histogram_strength_ratio * mean_abs_histogram:
                 return False
 
+        # Alternative Stage 10 trigger: histogram turns upward from a
+        # negative pullback, while MACD remains above the zero axis.
+        # This replaces the bullish crossover trigger, rather than
+        # requiring an impossible positive histogram simultaneously.
+        if self.use_macd_histogram_turn:
+            if i < 2 or macd[i - 1] is None or macd[i - 2] is None:
+                return False
+            previous_hist = macd[i - 1].histogram
+            older_hist = macd[i - 2].histogram
+            return (
+                self.macd_cross_above_zero
+                and current_macd.macd_line > 0
+                and previous_hist < 0
+                and previous_hist <= older_hist
+                and current_macd.histogram > previous_hist
+            )
+
         # The MACD cross must still be intact.
         if current_macd.macd_line <= current_macd.signal_line:
             return False
@@ -281,12 +300,14 @@ class HiLoMACDStrategy:
                          "trend_ema": self._ema_trend[index] if self.use_ema_trend_filter else None,
                          "atr": self._atr[index] if self.use_atr_volatility_filter else None,
                          "atr_sma": self._atr_sma[index] if self.use_atr_volatility_filter else None,
-                         "histogram_strength_ratio": self.histogram_strength_ratio if self.use_macd_histogram_strength_filter else None},
+                         "histogram_strength_ratio": self.histogram_strength_ratio if self.use_macd_histogram_strength_filter else None,
+                         "histogram_turn": self.use_macd_histogram_turn},
             reason=(
                 "Price closed above the Hi-Lo Activator while the "
-                "MACD line crossed above its signal line with the "
-                "configured zero-line filter. Entry scheduled for "
-                "next candle open."
+                ("MACD histogram turned upward after a negative pullback. "
+                 if self.use_macd_histogram_turn else
+                 "MACD line crossed above its signal line with the configured zero-line filter. ")
+                + "Entry scheduled for next candle open."
             ),
         )
 
