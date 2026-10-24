@@ -59,12 +59,18 @@ class BollingerSqueezeStrategy:
         use_body_filter: bool = False,
         use_ema_filter: bool = True,
         ema_period: int = 200,
+        allow_long: bool = False,
+        allow_short: bool = True,
         min_body_ratio: float = 0.60,
     ):
         if not 0.0 <= min_body_ratio <= 1.0:
             raise ValueError("min_body_ratio must be between 0 and 1")
         if ema_period <= 0:
             raise ValueError("ema_period must be positive")
+        if not allow_long and not allow_short:
+            raise ValueError("At least one trade direction must be enabled")
+        self.allow_long = allow_long
+        self.allow_short = allow_short
         self.use_ema_filter = use_ema_filter
         self.ema_period = ema_period
         self.config = config or BollingerConfig()
@@ -186,7 +192,7 @@ class BollingerSqueezeStrategy:
             current.close > previous_band.upper
         )
 
-        if bullish_breakout and (
+        if self.allow_long and bullish_breakout and (
             not self.use_ema_filter or (
                 self._ema_values[index] is not None
                 and current.close > self._ema_values[index]
@@ -224,7 +230,7 @@ class BollingerSqueezeStrategy:
             current.close < previous_band.lower
         )
 
-        if bearish_breakout and (
+        if self.allow_short and bearish_breakout and (
             not self.use_ema_filter or (
                 self._ema_values[index] is not None
                 and current.close < self._ema_values[index]
