@@ -247,6 +247,68 @@ class HiLoMACDStrategy:
             for j in range(first, i + 1)
         )
 
+    def diagnostic_row(self, candles: list[Candle], index: int) -> dict:
+        """Read-only snapshot of every entry gate on a completed candle."""
+        hilo, macd = self._indicators(candles)
+        candle = candles[index]
+        h = hilo[index]
+        m = macd[index]
+        prev = macd[index - 1] if index >= 1 else None
+        older = macd[index - 2] if index >= 2 else None
+        ema = self._ema_trend[index] if self.use_ema_trend_filter else None
+        atr = self._atr[index] if self.use_atr_volatility_filter else None
+        atr_avg = self._atr_sma[index] if self.use_atr_volatility_filter else None
+        gates = {
+            "hilo_bullish": h is not None and h.trend == HiLoTrend.BULLISH,
+            "close_above_hilo": h is not None and candle.close > h.line,
+            "ema_pass": not self.use_ema_trend_filter or (ema is not None and candle.close > ema),
+            "atr_pass": not self.use_atr_volatility_filter or (atr is not None and atr_avg is not None and atr >= atr_avg),
+        }
+        if self.use_macd_histogram_turn:
+            gates["histogram_turn_pass"] = (
+                m is not None and prev is not None and older is not None
+                and self.macd_cross_above_zero and m.macd_line > 0
+                and prev.histogram < 0 and prev.histogram <= older.histogram
+                and m.histogram > prev.histogram
+            )
+        else:
+            gates["macd_cross_pass"] = m is not None and m.macd_line > m.signal_line and any(
+                self._macd_crossed_up(macd, j)
+                for j in range(max(1, index - self.macd_cross_lookback + 1), index + 1)
+            )
+        if self.use_macd_histogram_strength_filter:
+            start = index - self.histogram_strength_lookback
+            history = macd[start:index] if start >= 0 else []
+            valid = len(history) == self.histogram_strength_lookback and all(x is not None for x in history)
+            avg = sum(abs(x.histogram) for x in history) / len(history) if valid else None
+            gates["histogram_strength_pass"] = (
+                m is not None and avg is not None and m.histogram > 0
+                and m.histogram >= self.histogram_strength_ratio * avg
+            )
+        condition = self._entry_condition(candles, hilo, macd, index)
+        previous_condition = self._entry_condition(candles, hilo, macd, index - 1) if index > 0 else False
+        row = {
+            "timestamp": candle.timestamp.isoformat(),
+            "open": candle.open, "high": candle.high, "low": candle.low, "close": candle.close,
+            "hilo_trend": h.trend.value if h else None,
+            "hilo_line": h.line if h else None,
+            "hilo_bullish_line": h.bullish_line if h else None,
+            "hilo_bearish_line": h.bearish_line if h else None,
+            "ema": ema, "atr": atr, "atr_sma": atr_avg,
+            "macd_line": m.macd_line if m else None,
+            "macd_signal": m.signal_line if m else None,
+            "histogram": m.histogram if m else None,
+            "histogram_prev": prev.histogram if prev else None,
+            "histogram_prev2": older.histogram if older else None,
+            "previous_high": candles[index - 1].high if index > 0 else None,
+            "condition_pass": condition,
+            "previous_condition_pass": previous_condition,
+            "signal_candidate": condition and not previous_condition and h is not None and h.line < candle.close,
+        }
+        row.update(gates)
+        row["failed_filters"] = "|".join(name for name, passed in gates.items() if not passed)
+        return row
+
     def generate_signal(
         self,
         candles: list[Candle],
