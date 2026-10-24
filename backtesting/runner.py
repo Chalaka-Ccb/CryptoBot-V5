@@ -404,9 +404,9 @@ class BacktestRunner:
                 or evaluation.signal is None
             ):
                 evaluation = (
-                    self.strategy_coordinator.evaluate(
-                        candles_15m=[],
+                    self.strategy_coordinator.evaluate_5m_with_15m_confirmation(
                         candles_5m=closed_candles["5m"],
+                        closed_candles_15m=closed_candles["15m"],
                     )
                 )
 
