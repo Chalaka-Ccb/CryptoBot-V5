@@ -4,7 +4,6 @@ from backtesting.strategy_setup import (
     create_strategy_coordinator,
 )
 
-
 def main():
 
     loader = ExchangeDataLoader(
