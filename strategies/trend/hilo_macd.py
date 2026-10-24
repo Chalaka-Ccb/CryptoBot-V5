@@ -246,15 +246,5 @@ class HiLoMACDStrategy:
         candles: list[Candle],
         index: int,
     ) -> float | None:
-
-        if index < 0 or index >= len(candles):
-            return None
-
-        hilo, _ = self._indicators(candles)
-
-        current_hilo = hilo[index]
-
-        if current_hilo is None:
-            return None
-
-        return current_hilo.line
+        """Stage 2 experiment: disable dynamic trailing; retain initial SL."""
+        return None
