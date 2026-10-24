@@ -10,6 +10,6 @@ from strategies.bollinger.squeeze import BollingerSqueezeStrategy
 
 def create_strategy_coordinator() -> StrategyCoordinator:
     return StrategyCoordinator(
-        strategies_15m=[BollingerSqueezeStrategy()],
+        strategies_15m=[],
         strategies_5m=[BollingerSqueezeStrategy()],
     )
