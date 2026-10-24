@@ -62,9 +62,12 @@ class BollingerSqueezeStrategy:
         allow_long: bool = False,
         allow_short: bool = True,
         min_body_ratio: float = 0.60,
+        volume_multiplier: float = 1.5,
     ):
         if not 0.0 <= min_body_ratio <= 1.0:
             raise ValueError("min_body_ratio must be between 0 and 1")
+        if volume_multiplier <= 0:
+            raise ValueError("volume_multiplier must be positive")
         if ema_period <= 0:
             raise ValueError("ema_period must be positive")
         if not allow_long and not allow_short:
@@ -76,6 +79,7 @@ class BollingerSqueezeStrategy:
         self.config = config or BollingerConfig()
         self.use_body_filter = use_body_filter
         self.min_body_ratio = min_body_ratio
+        self.volume_multiplier = volume_multiplier
         self._cache_key: tuple[int, int] | None = None
         self._bands = []
         self._volume_sma = []
@@ -169,7 +173,7 @@ class BollingerSqueezeStrategy:
         # -----------------------------------
 
         high_volume = (
-            current.volume > preceding_volume_sma
+            current.volume > preceding_volume_sma * self.volume_multiplier
         )
 
         if not high_volume:
