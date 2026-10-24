@@ -59,6 +59,7 @@ class HiLoMACDStrategy:
         use_atr_volatility_filter: bool = False,
         atr_period: int = 14,
         atr_sma_period: int = 50,
+        use_hilo_trailing_stop: bool = True,
     ):
         if macd_cross_lookback < 1:
             raise ValueError("macd_cross_lookback must be at least 1")
@@ -83,6 +84,7 @@ class HiLoMACDStrategy:
 
         if atr_period < 1 or atr_sma_period < 1:
             raise ValueError("ATR periods must be positive")
+        self.use_hilo_trailing_stop = use_hilo_trailing_stop
         self.use_atr_volatility_filter = use_atr_volatility_filter
         self.atr_period = atr_period
         self.atr_sma_period = atr_sma_period
@@ -293,6 +295,8 @@ class HiLoMACDStrategy:
         candles: list[Candle],
         index: int,
     ) -> float | None:
+        if not self.use_hilo_trailing_stop:
+            return None
         if index < 0 or index >= len(candles):
             return None
         hilo, _ = self._indicators(candles)
