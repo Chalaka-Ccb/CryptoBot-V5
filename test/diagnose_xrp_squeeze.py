@@ -1,6 +1,6 @@
-"""Reproduce and diagnose the first six XRP squeeze losses without changing entry rules.
+"""Diagnose the full XRP squeeze baseline: compare winners and losers without changing entry rules.
 
-Run: python test/diagnose_xrp_squeeze.py
+Run from repo root: python -m test.diagnose_xrp_squeeze
 Requires Bybit historical OHLCV. Saves CSVs in diagnostic_output/.
 """
 import csv
@@ -19,7 +19,7 @@ from strategies.bollinger.squeeze import BollingerSqueezeStrategy
 SYMBOL = "XRP/USDT:USDT"
 # Preserve the original 8999-candle test start for indicator initialization.
 START = datetime(2026, 9, 23, 2, 45, tzinfo=timezone.utc)
-END_EXCLUSIVE = datetime(2026, 10, 11, 0, 0, tzinfo=timezone.utc)
+END_EXCLUSIVE = datetime(2026, 10, 24, 8, 40, tzinfo=timezone.utc)
 OUT = Path("diagnostic_output")
 
 
