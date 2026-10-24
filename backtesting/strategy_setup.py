@@ -11,9 +11,12 @@ def create_strategy_coordinator() -> StrategyCoordinator:
     HILO_MACD_ATR_PERIOD = 14
     HILO_MACD_ATR_SMA_PERIOD = 50
     HILO_MACD_USE_TRAILING_STOP = True
-    HILO_MACD_FAST = 8
-    HILO_MACD_SLOW = 21
-    HILO_MACD_SIGNAL = 5
+    HILO_MACD_FAST = 12
+    HILO_MACD_SLOW = 26
+    HILO_MACD_SIGNAL = 9
+    HILO_MACD_USE_HISTOGRAM_STRENGTH = True
+    HILO_MACD_HISTOGRAM_LOOKBACK = 20
+    HILO_MACD_HISTOGRAM_RATIO = 0.5
     HILO_MACD_CROSS_BELOW_ZERO = not HILO_MACD_CROSS_ABOVE_ZERO
 
     def hilo_macd():
@@ -21,6 +24,9 @@ def create_strategy_coordinator() -> StrategyCoordinator:
             macd_fast=HILO_MACD_FAST,
             macd_slow=HILO_MACD_SLOW,
             macd_signal=HILO_MACD_SIGNAL,
+            use_macd_histogram_strength_filter=HILO_MACD_USE_HISTOGRAM_STRENGTH,
+            histogram_strength_lookback=HILO_MACD_HISTOGRAM_LOOKBACK,
+            histogram_strength_ratio=HILO_MACD_HISTOGRAM_RATIO,
             macd_cross_below_zero=HILO_MACD_CROSS_BELOW_ZERO,
             macd_cross_above_zero=HILO_MACD_CROSS_ABOVE_ZERO,
             use_ema_trend_filter=HILO_MACD_USE_EMA_FILTER,
