@@ -6,6 +6,7 @@ from indicators.hilo_activator import (
 )
 from indicators.macd import calculate_macd
 from indicators.ema import calculate_ema
+from indicators.atr import calculate_atr
 
 
 class HiLoMACDStrategy:
@@ -55,6 +56,9 @@ class HiLoMACDStrategy:
         macd_cross_above_zero: bool = False,
         use_ema_trend_filter: bool = False,
         ema_trend_period: int = 200,
+        use_atr_volatility_filter: bool = False,
+        atr_period: int = 14,
+        atr_sma_period: int = 50,
     ):
         if macd_cross_lookback < 1:
             raise ValueError("macd_cross_lookback must be at least 1")
@@ -76,6 +80,14 @@ class HiLoMACDStrategy:
         self.use_ema_trend_filter = use_ema_trend_filter
         self.ema_trend_period = ema_trend_period
         self._ema_trend = []
+
+        if atr_period < 1 or atr_sma_period < 1:
+            raise ValueError("ATR periods must be positive")
+        self.use_atr_volatility_filter = use_atr_volatility_filter
+        self.atr_period = atr_period
+        self.atr_sma_period = atr_sma_period
+        self._atr = []
+        self._atr_sma = []
 
         self._cache_key: tuple[int, int] | None = None
         self._hilo = []
@@ -103,6 +115,14 @@ class HiLoMACDStrategy:
             )
             self._ema_trend = (calculate_ema(candles, self.ema_trend_period)
                                if self.use_ema_trend_filter else [])
+            if self.use_atr_volatility_filter:
+                self._atr = calculate_atr(candles, period=self.atr_period)
+                self._atr_sma = [None] * len(candles)
+                for j in range(self.atr_period - 1 + self.atr_sma_period - 1, len(candles)):
+                    window = self._atr[j - self.atr_sma_period + 1:j + 1]
+                    self._atr_sma[j] = sum(window) / self.atr_sma_period
+            else:
+                self._atr, self._atr_sma = [], []
             self._cache_key = key
 
         return self._hilo, self._macd
@@ -168,6 +188,13 @@ class HiLoMACDStrategy:
             if trend_ema is None or candles[i].close <= trend_ema:
                 return False
 
+        # Stage 4: reject signals in below-average volatility.
+        if self.use_atr_volatility_filter:
+            atr = self._atr[i]
+            atr_average = self._atr_sma[i]
+            if atr is None or atr_average is None or atr < atr_average:
+                return False
+
         # The MACD cross must still be intact.
         if current_macd.macd_line <= current_macd.signal_line:
             return False
@@ -229,7 +256,9 @@ class HiLoMACDStrategy:
                          "cross_lookback": self.macd_cross_lookback,
                          "cross_below_zero": self.macd_cross_below_zero,
                          "cross_above_zero": self.macd_cross_above_zero,
-                         "trend_ema": self._ema_trend[index] if self.use_ema_trend_filter else None},
+                         "trend_ema": self._ema_trend[index] if self.use_ema_trend_filter else None,
+                         "atr": self._atr[index] if self.use_atr_volatility_filter else None,
+                         "atr_sma": self._atr_sma[index] if self.use_atr_volatility_filter else None},
             reason=(
                 "Price closed above the Hi-Lo Activator while the "
                 "MACD line crossed above its signal line with the "
