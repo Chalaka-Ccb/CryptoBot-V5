@@ -16,6 +16,8 @@ def create_strategy_coordinator() -> StrategyCoordinator:
     HILO_MACD_SIGNAL = 9
     HILO_MACD_USE_HISTOGRAM_STRENGTH = False
     HILO_MACD_USE_HISTOGRAM_TURN = True
+    HILO_MACD_REQUIRE_15M_HILO_FOR_5M = True
+    HILO_MACD_CONFIRMATION_HILO_PERIOD = 3
     HILO_MACD_HISTOGRAM_LOOKBACK = 20
     HILO_MACD_HISTOGRAM_RATIO = 0.2
     HILO_MACD_CROSS_BELOW_ZERO = not HILO_MACD_CROSS_ABOVE_ZERO
@@ -42,4 +44,6 @@ def create_strategy_coordinator() -> StrategyCoordinator:
     return StrategyCoordinator(
         strategies_15m=[hilo_macd()],
         strategies_5m=[hilo_macd()],
+        require_15m_hilo_for_5m=HILO_MACD_REQUIRE_15M_HILO_FOR_5M,
+        confirmation_hilo_period=HILO_MACD_CONFIRMATION_HILO_PERIOD,
     )
