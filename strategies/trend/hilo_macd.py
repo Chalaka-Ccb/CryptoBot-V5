@@ -60,6 +60,9 @@ class HiLoMACDStrategy:
         atr_period: int = 14,
         atr_sma_period: int = 50,
         use_hilo_trailing_stop: bool = True,
+        use_macd_histogram_strength_filter: bool = False,
+        histogram_strength_lookback: int = 20,
+        histogram_strength_ratio: float = 0.5,
     ):
         if macd_cross_lookback < 1:
             raise ValueError("macd_cross_lookback must be at least 1")
@@ -84,6 +87,11 @@ class HiLoMACDStrategy:
 
         if atr_period < 1 or atr_sma_period < 1:
             raise ValueError("ATR periods must be positive")
+        if histogram_strength_lookback < 1 or histogram_strength_ratio < 0:
+            raise ValueError("Histogram strength parameters must be non-negative, with lookback >= 1")
+        self.use_macd_histogram_strength_filter = use_macd_histogram_strength_filter
+        self.histogram_strength_lookback = histogram_strength_lookback
+        self.histogram_strength_ratio = histogram_strength_ratio
         self.use_hilo_trailing_stop = use_hilo_trailing_stop
         self.use_atr_volatility_filter = use_atr_volatility_filter
         self.atr_period = atr_period
@@ -197,6 +205,18 @@ class HiLoMACDStrategy:
             if atr is None or atr_average is None or atr < atr_average:
                 return False
 
+        # Stage 7: require positive crossover momentum relative to recent MACD activity.
+        if self.use_macd_histogram_strength_filter:
+            start = i - self.histogram_strength_lookback
+            if start < 0:
+                return False
+            history = self._macd[start:i]
+            if any(item is None for item in history):
+                return False
+            mean_abs_histogram = sum(abs(item.histogram) for item in history) / len(history)
+            if current_macd.histogram <= 0 or current_macd.histogram < self.histogram_strength_ratio * mean_abs_histogram:
+                return False
+
         # The MACD cross must still be intact.
         if current_macd.macd_line <= current_macd.signal_line:
             return False
@@ -260,7 +280,8 @@ class HiLoMACDStrategy:
                          "cross_above_zero": self.macd_cross_above_zero,
                          "trend_ema": self._ema_trend[index] if self.use_ema_trend_filter else None,
                          "atr": self._atr[index] if self.use_atr_volatility_filter else None,
-                         "atr_sma": self._atr_sma[index] if self.use_atr_volatility_filter else None},
+                         "atr_sma": self._atr_sma[index] if self.use_atr_volatility_filter else None,
+                         "histogram_strength_ratio": self.histogram_strength_ratio if self.use_macd_histogram_strength_filter else None},
             reason=(
                 "Price closed above the Hi-Lo Activator while the "
                 "MACD line crossed above its signal line with the "
