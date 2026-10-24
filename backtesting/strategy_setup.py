@@ -7,6 +7,9 @@ def create_strategy_coordinator() -> StrategyCoordinator:
     HILO_MACD_CROSS_ABOVE_ZERO = True
     HILO_MACD_USE_EMA_FILTER = True
     HILO_MACD_EMA_PERIOD = 200
+    HILO_MACD_USE_ATR_FILTER = True
+    HILO_MACD_ATR_PERIOD = 14
+    HILO_MACD_ATR_SMA_PERIOD = 50
     HILO_MACD_CROSS_BELOW_ZERO = not HILO_MACD_CROSS_ABOVE_ZERO
 
     def hilo_macd():
@@ -15,6 +18,9 @@ def create_strategy_coordinator() -> StrategyCoordinator:
             macd_cross_above_zero=HILO_MACD_CROSS_ABOVE_ZERO,
             use_ema_trend_filter=HILO_MACD_USE_EMA_FILTER,
             ema_trend_period=HILO_MACD_EMA_PERIOD,
+            use_atr_volatility_filter=HILO_MACD_USE_ATR_FILTER,
+            atr_period=HILO_MACD_ATR_PERIOD,
+            atr_sma_period=HILO_MACD_ATR_SMA_PERIOD,
         )
 
     return StrategyCoordinator(
