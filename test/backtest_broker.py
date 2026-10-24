@@ -1,3 +1,6 @@
+import csv
+from pathlib import Path
+
 from backtesting.data_loader import ExchangeDataLoader
 from backtesting.runner import BacktestRunner
 from backtesting.strategy_setup import (
@@ -25,6 +28,7 @@ def main():
         default_risk_reward=3.0,
         default_stop_percentage=0.01,
         breakout_expiry_candles=3,
+        diagnostic_csv="backtesting/reports/hilo_macd_diagnostics.csv",
     )
 
     result = runner.run(
@@ -41,6 +45,18 @@ def main():
     print(f"Total PnL: {result.total_pnl:.2f} USDT")
     print(f"Return: {result.return_percentage:.2f}%")
     print(f"Final balance: {result.final_balance:.2f} USDT")
+    trades_path = Path("backtesting/reports/hilo_macd_trades.csv")
+    trades_path.parent.mkdir(parents=True, exist_ok=True)
+    from dataclasses import asdict
+    with trades_path.open("w", newline="", encoding="utf-8") as stream:
+        if result.trades:
+            writer = csv.DictWriter(stream, fieldnames=list(asdict(result.trades[0]).keys()))
+            writer.writeheader()
+            writer.writerows(asdict(trade) for trade in result.trades)
+        else:
+            stream.write("no_closed_trades\\n")
+    print(f"Trades CSV: {trades_path.resolve()}")
+
 
 
 if __name__ == "__main__":
