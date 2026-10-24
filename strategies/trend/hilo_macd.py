@@ -304,9 +304,9 @@ class HiLoMACDStrategy:
                          "histogram_turn": self.use_macd_histogram_turn},
             reason=(
                 "Price closed above the Hi-Lo Activator while the "
-                ("MACD histogram turned upward after a negative pullback. "
-                 if self.use_macd_histogram_turn else
-                 "MACD line crossed above its signal line with the configured zero-line filter. ")
+                + ("MACD histogram turned upward after a negative pullback. "
+                   if self.use_macd_histogram_turn else
+                   "MACD line crossed above its signal line with the configured zero-line filter. ")
                 + "Entry scheduled for next candle open."
             ),
         )
