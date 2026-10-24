@@ -5,6 +5,7 @@ from indicators.hilo_activator import (
     calculate_hilo_activator,
 )
 from indicators.macd import calculate_macd
+from indicators.ema import calculate_ema
 
 
 class HiLoMACDStrategy:
@@ -52,6 +53,8 @@ class HiLoMACDStrategy:
         macd_cross_lookback: int = 1,
         macd_cross_below_zero: bool = True,
         macd_cross_above_zero: bool = False,
+        use_ema_trend_filter: bool = False,
+        ema_trend_period: int = 200,
     ):
         if macd_cross_lookback < 1:
             raise ValueError("macd_cross_lookback must be at least 1")
@@ -67,6 +70,12 @@ class HiLoMACDStrategy:
             raise ValueError("Choose either below-zero or above-zero MACD crossover filtering")
         self.macd_cross_below_zero = macd_cross_below_zero
         self.macd_cross_above_zero = macd_cross_above_zero
+
+        if ema_trend_period < 1:
+            raise ValueError("ema_trend_period must be positive")
+        self.use_ema_trend_filter = use_ema_trend_filter
+        self.ema_trend_period = ema_trend_period
+        self._ema_trend = []
 
         self._cache_key: tuple[int, int] | None = None
         self._hilo = []
@@ -92,6 +101,8 @@ class HiLoMACDStrategy:
                 slow_period=self.macd_slow,
                 signal_period=self.macd_signal,
             )
+            self._ema_trend = (calculate_ema(candles, self.ema_trend_period)
+                               if self.use_ema_trend_filter else [])
             self._cache_key = key
 
         return self._hilo, self._macd
@@ -150,6 +161,12 @@ class HiLoMACDStrategy:
 
         if candles[i].close <= current_hilo.line:
             return False
+
+        # Stage 3: allow longs only when price is above its trend EMA.
+        if self.use_ema_trend_filter:
+            trend_ema = self._ema_trend[i]
+            if trend_ema is None or candles[i].close <= trend_ema:
+                return False
 
         # The MACD cross must still be intact.
         if current_macd.macd_line <= current_macd.signal_line:
@@ -211,7 +228,8 @@ class HiLoMACDStrategy:
                          "macd_histogram": macd[index].histogram,
                          "cross_lookback": self.macd_cross_lookback,
                          "cross_below_zero": self.macd_cross_below_zero,
-                         "cross_above_zero": self.macd_cross_above_zero},
+                         "cross_above_zero": self.macd_cross_above_zero,
+                         "trend_ema": self._ema_trend[index] if self.use_ema_trend_filter else None},
             reason=(
                 "Price closed above the Hi-Lo Activator while the "
                 "MACD line crossed above its signal line with the "
@@ -246,5 +264,8 @@ class HiLoMACDStrategy:
         candles: list[Candle],
         index: int,
     ) -> float | None:
-        """Stage 2 experiment: disable dynamic trailing; retain initial SL."""
-        return None
+        if index < 0 or index >= len(candles):
+            return None
+        hilo, _ = self._indicators(candles)
+        current_hilo = hilo[index]
+        return current_hilo.line if current_hilo is not None else None
