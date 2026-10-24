@@ -10,11 +10,17 @@ def create_strategy_coordinator() -> StrategyCoordinator:
     HILO_MACD_USE_ATR_FILTER = True
     HILO_MACD_ATR_PERIOD = 14
     HILO_MACD_ATR_SMA_PERIOD = 50
-    HILO_MACD_USE_TRAILING_STOP = False
+    HILO_MACD_USE_TRAILING_STOP = True
+    HILO_MACD_FAST = 8
+    HILO_MACD_SLOW = 21
+    HILO_MACD_SIGNAL = 5
     HILO_MACD_CROSS_BELOW_ZERO = not HILO_MACD_CROSS_ABOVE_ZERO
 
     def hilo_macd():
         return HiLoMACDStrategy(
+            macd_fast=HILO_MACD_FAST,
+            macd_slow=HILO_MACD_SLOW,
+            macd_signal=HILO_MACD_SIGNAL,
             macd_cross_below_zero=HILO_MACD_CROSS_BELOW_ZERO,
             macd_cross_above_zero=HILO_MACD_CROSS_ABOVE_ZERO,
             use_ema_trend_filter=HILO_MACD_USE_EMA_FILTER,
