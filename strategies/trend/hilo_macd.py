@@ -51,6 +51,7 @@ class HiLoMACDStrategy:
         macd_signal: int = 9,
         macd_cross_lookback: int = 1,
         macd_cross_below_zero: bool = True,
+        macd_cross_above_zero: bool = False,
     ):
         if macd_cross_lookback < 1:
             raise ValueError("macd_cross_lookback must be at least 1")
@@ -62,7 +63,10 @@ class HiLoMACDStrategy:
         self.macd_signal = macd_signal
 
         self.macd_cross_lookback = macd_cross_lookback
+        if macd_cross_below_zero and macd_cross_above_zero:
+            raise ValueError("Choose either below-zero or above-zero MACD crossover filtering")
         self.macd_cross_below_zero = macd_cross_below_zero
+        self.macd_cross_above_zero = macd_cross_above_zero
 
         self._cache_key: tuple[int, int] | None = None
         self._hilo = []
@@ -116,6 +120,8 @@ class HiLoMACDStrategy:
             return False
 
         if self.macd_cross_below_zero and current.macd_line >= 0:
+            return False
+        if self.macd_cross_above_zero and current.macd_line <= 0:
             return False
 
         return True
@@ -204,12 +210,13 @@ class HiLoMACDStrategy:
                          "macd_signal": macd[index].signal_line,
                          "macd_histogram": macd[index].histogram,
                          "cross_lookback": self.macd_cross_lookback,
-                         "cross_below_zero": self.macd_cross_below_zero},
+                         "cross_below_zero": self.macd_cross_below_zero,
+                         "cross_above_zero": self.macd_cross_above_zero},
             reason=(
                 "Price closed above the Hi-Lo Activator while the "
-                "MACD line crossed above its signal line beneath "
-                "the zero axis. Entry scheduled for next candle "
-                "open."
+                "MACD line crossed above its signal line with the "
+                "configured zero-line filter. Entry scheduled for "
+                "next candle open."
             ),
         )
 
