@@ -1,5 +1,9 @@
 
 from dataclasses import dataclass
+import csv
+from pathlib import Path
+from collections import Counter
+from indicators.hilo_activator import calculate_hilo_activator, HiLoTrend
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -27,6 +31,7 @@ class BacktestRunner:
 
     # Number of future 5m candles allowed for breakout.
     breakout_expiry_candles: int = 3
+    diagnostic_csv: str | None = None
 
     @staticmethod
     def _convert_trade(trade) -> BacktestTrade:
@@ -194,6 +199,7 @@ class BacktestRunner:
         trade_timeframes = {}
 
         signal_count = 0
+        diagnostic_rows = []
 
         print("\n===== BACKTEST STARTED =====")
         print(f"Symbol: {symbol}")
@@ -375,6 +381,50 @@ class BacktestRunner:
             if closed_trade is not None:
                 completed_trades.append(closed_trade)
 
+            # Diagnostics are sampled even while a position is open.
+            # These rows are observations, NOT necessarily executable signals.
+            if self.diagnostic_csv:
+                for timeframe, ready in (("15m", fifteen_closed is not None), ("5m", True)):
+                    if not ready:
+                        continue
+                    history = closed_candles[timeframe]
+                    strategies = (
+                        self.strategy_coordinator.strategies_15m if timeframe == "15m"
+                        else self.strategy_coordinator.strategies_5m
+                    )
+                    for strategy in strategies:
+                        if not hasattr(strategy, "diagnostic_row"):
+                            continue
+                        row = strategy.diagnostic_row(history, len(history) - 1)
+                        row["timeframe"] = timeframe
+                        row["strategy"] = strategy.name
+                        row["evaluated_at"] = close_time.isoformat()
+                        row["position_open"] = broker.has_open_trade(symbol)
+                        row["pending_order"] = pending_entry is not None
+                        row["htf_confirmation_enabled"] = (
+                            timeframe == "5m" and self.strategy_coordinator.require_15m_hilo_for_5m
+                        )
+                        if timeframe == "5m" and closed_candles["15m"]:
+                            htf = calculate_hilo_activator(
+                                closed_candles["15m"],
+                                period=self.strategy_coordinator.confirmation_hilo_period,
+                            )[-1]
+                            row["htf_hilo_trend"] = htf.trend.value if htf else None
+                            row["htf_hilo_line"] = htf.line if htf else None
+                            row["htf_pass"] = (
+                                htf is not None and htf.trend == HiLoTrend.BULLISH
+                                and closed_candles["15m"][-1].close > htf.line
+                            )
+                        else:
+                            row["htf_hilo_trend"] = None
+                            row["htf_hilo_line"] = None
+                            row["htf_pass"] = None
+                        row["htf_rejected"] = (
+                            row["signal_candidate"] and row["htf_confirmation_enabled"]
+                            and row["htf_pass"] is not True
+                        )
+                        diagnostic_rows.append(row)
+
             # -----------------------------------------
             # 7. ONE ORDER/POSITION PER SYMBOL
             # -----------------------------------------
@@ -467,6 +517,22 @@ class BacktestRunner:
         # -----------------------------------------
         # 10. FINAL RESULTS
         # -----------------------------------------
+
+        if self.diagnostic_csv and diagnostic_rows:
+            destination = Path(self.diagnostic_csv)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("w", newline="", encoding="utf-8") as stream:
+                writer = csv.DictWriter(stream, fieldnames=list(diagnostic_rows[0].keys()), extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(diagnostic_rows)
+            failures = Counter()
+            for row in diagnostic_rows:
+                failures.update(row["failed_filters"].split("|") if row["failed_filters"] else [])
+            print(f"Diagnostics CSV: {destination.resolve()}")
+            print(f"Diagnostic candles: {len(diagnostic_rows)}")
+            print(f"Raw entry candidates: {sum(bool(r['signal_candidate']) for r in diagnostic_rows)}")
+            print(f"Rejected by 15m HiLo: {sum(bool(r['htf_rejected']) for r in diagnostic_rows)}")
+            print(f"Filter failure counts (overlap allowed): {dict(failures)}")
 
         print("\n===== BACKTEST FINISHED =====")
         print(f"Signals: {signal_count}")
