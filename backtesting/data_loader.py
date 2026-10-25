@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import time
 from typing import Any
 from backtesting.market_data import BacktestMarketData
 import ccxt
@@ -25,6 +26,28 @@ class ExchangeDataLoader:
                 "defaultType": market_type,
             },
         })
+
+    def _fetch_with_retry(self, *, symbol, timeframe, limit, since=None):
+        """Retry transient exchange/server errors, but not invalid requests."""
+        for attempt in range(5):
+            try:
+                return self.exchange.fetch_ohlcv(
+                    symbol=symbol, timeframe=timeframe, since=since, limit=limit,
+                )
+            except (ccxt.NetworkError, ccxt.ExchangeNotAvailable,
+                    ccxt.OnMaintenance, ccxt.RateLimitExceeded) as error:
+                if attempt == 4:
+                    raise
+                delay = min(2 ** attempt, 12)
+                print(f"OHLCV temporary failure ({timeframe}): {error}; retry in {delay}s")
+                time.sleep(delay)
+            except ccxt.ExchangeError as error:
+                # Bybit's retCode 10016 is a transient server failure.
+                if '10016' not in str(error) or attempt == 4:
+                    raise
+                delay = min(2 ** attempt, 12)
+                print(f"Bybit kline service error ({timeframe}); retry in {delay}s")
+                time.sleep(delay)
 
     def load_candles(
         self,
