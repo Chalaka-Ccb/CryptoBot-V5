@@ -8,6 +8,7 @@ from backtesting.execution import BacktestExecution
 from backtesting.market_data import BacktestMarketData
 from backtesting.result import BacktestResult, BacktestTrade
 
+from core.models.candle import Candle
 from core.enums.position import PositionSide
 from core.enums.trade import ExitReason
 from core.models.account import Account
@@ -28,6 +29,8 @@ class BacktestRunner:
     # Number of future 5m candles allowed for breakout.
     breakout_expiry_candles: int = 3
     execution_timeframe: str = '5m'
+    custom_signal_timeframe: str | None = None
+    custom_signal_strategy: object | None = None
 
     @staticmethod
     def _convert_trade(trade) -> BacktestTrade:
@@ -158,6 +161,10 @@ class BacktestRunner:
                 "execution candles are required"
             )
 
+        if self.custom_signal_strategy is not None and self.custom_signal_timeframe not in ("5m", "15m", "30m", "1h"):
+            raise ValueError("custom_signal_timeframe must be 5m, 15m, 30m, or 1h")
+        if self.custom_signal_strategy is not None and self.execution_timeframe != "5m":
+            raise ValueError("Custom signal timeframes require 5m execution")
         symbol = market_data.symbol
 
         broker = BacktestBroker(
@@ -195,6 +202,7 @@ class BacktestRunner:
             for candle in market_data.candles_15m
         }
 
+        custom_closed = []
         pending_entry = None
         pending_age = 0
 
@@ -354,14 +362,51 @@ class BacktestRunner:
                     fifteen_closed
                 )
 
+            # Build completed signal candles from 5m data only, never partial candles.
+            custom_completed = False
+            if self.custom_signal_strategy is not None:
+                minutes = {"5m": 5, "15m": 15, "30m": 30, "1h": 60}[self.custom_signal_timeframe]
+                if minutes == 5:
+                    custom_closed.append(candle)
+                    custom_completed = True
+                elif close_time.minute % minutes == 0 and (minutes != 60 or close_time.minute == 0):
+                    count = minutes // 5
+                    segment = closed_candles["5m"][-count:]
+                    if (len(segment) == count and
+                        segment[0].timestamp.minute % minutes == 0 and
+                        all(segment[i].timestamp + timedelta(minutes=5) == segment[i+1].timestamp
+                            for i in range(len(segment)-1))):
+                        custom_closed.append(Candle(
+                            timestamp=segment[0].timestamp,
+                            open=segment[0].open,
+                            high=max(c.high for c in segment),
+                            low=min(c.low for c in segment),
+                            close=segment[-1].close,
+                            volume=sum(c.volume for c in segment),
+                        ))
+                        custom_completed = True
+
             # -----------------------------------------
             # 6. STRATEGY EXITS
             # -----------------------------------------
 
+            if custom_completed and broker.has_open_trade(symbol):
+                trade = broker.get_open_trade(symbol)
+                if trade.strategy == self.custom_signal_strategy.name:
+                    index = len(custom_closed) - 1
+                    exit_method = (self.custom_signal_strategy.should_exit_long
+                                   if trade.side == PositionSide.LONG
+                                   else self.custom_signal_strategy.should_exit_short)
+                    if exit_method(custom_closed, index):
+                        completed_trades.append(broker.close_trade(
+                            symbol=symbol, exit_price=custom_closed[-1].close,
+                            exit_time=close_time, exit_reason=ExitReason.STRATEGY_EXIT,
+                        ))
+
             # 15m strategy exits first when a 15m
             # candle closes at this boundary.
 
-            if fifteen_closed is not None:
+            if fifteen_closed is not None and self.custom_signal_strategy is None:
                 closed_trade = self._manage_strategy_exit(
                     broker=broker,
                     symbol=symbol,
@@ -375,7 +420,7 @@ class BacktestRunner:
                     completed_trades.append(closed_trade)
 
             # 5m strategy exits.
-            if five_closed is not None:
+            if five_closed is not None and self.custom_signal_strategy is None:
                 closed_trade = self._manage_strategy_exit(
                     broker=broker,
                     symbol=symbol,
@@ -412,8 +457,16 @@ class BacktestRunner:
             # -----------------------------------------
 
             evaluation = None
+            if self.custom_signal_strategy is not None:
+                if not custom_completed:
+                    continue
+                signal = self.custom_signal_strategy.generate_signal(custom_closed, len(custom_closed)-1)
+                if signal is not None:
+                    evaluation = SimpleNamespace(signal=signal, timeframe=self.custom_signal_timeframe)
+                else:
+                    continue
 
-            if fifteen_closed is not None:
+            if self.custom_signal_strategy is None and fifteen_closed is not None:
                 evaluation = (
                     self.strategy_coordinator.evaluate(
                         candles_15m=closed_candles["15m"],
@@ -424,6 +477,7 @@ class BacktestRunner:
             if (
                 (evaluation is None or evaluation.signal is None)
                 and five_closed is not None
+                and self.custom_signal_strategy is None
             ):
                 evaluation = (
                     self.strategy_coordinator.evaluate(
