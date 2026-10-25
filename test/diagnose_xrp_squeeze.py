@@ -1,8 +1,9 @@
 """Diagnose the full XRP squeeze baseline: compare winners and losers without changing entry rules.
 
-Run from repo root: python -m test.diagnose_xrp_squeeze
+Run from repo root: python -m test.diagnose_xrp_squeeze --period 1
 Requires Bybit historical OHLCV. Saves CSVs in diagnostic_output/.
 """
+import argparse
 import csv
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -55,7 +56,7 @@ def safe(values, i):
 
 class DiagnosticSqueeze(BollingerSqueezeStrategy):
     def __init__(self):
-        super().__init__()  # Baseline: SHORT only, EMA200, volume 1.5x.
+        super().__init__(use_body_filter=True, min_body_ratio=0.80)  # Match current 5m backtest.
         self.signal_rows = []
 
     def generate_signal(self, candles, index):
@@ -108,18 +109,28 @@ def write_csv(path, rows):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--period", type=int, choices=(1, 2, 3), required=True)
+    args = parser.parse_args()
+    anchor = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    start = anchor - timedelta(days=(4 - args.period) * 30)
+    end = start + timedelta(days=30)
     OUT.mkdir(exist_ok=True)
     loader = ExchangeDataLoader(exchange_name="bybit", market_type="swap")
-    candles = load_fixed_window(loader)
+    market_data = loader.load_dated_5m_market_data(
+        symbol=SYMBOL, start=start, end=end, warmup_candles=250,
+    )
+    candles = market_data.candles_5m
     strategy = DiagnosticSqueeze()
     coordinator = StrategyCoordinator(strategies_15m=[], strategies_5m=[strategy])
     runner = BacktestRunner(
         strategy_coordinator=coordinator, initial_balance=10_000.0,
         risk_percentage=0.05, default_risk_reward=3.0,
         default_stop_percentage=0.01, breakout_expiry_candles=3,
+        trade_start_time=start,
     )
-    result = runner.run(BacktestMarketData(symbol=SYMBOL, candles_15m=[], candles_5m=candles))
-    write_csv(OUT / "xrp_signals.csv", strategy.signal_rows)
+    result = runner.run(market_data)
+    write_csv(OUT / f"xrp_signals_period_{args.period}.csv", strategy.signal_rows)
     trade_rows = []
     for trade in result.trades:
         # OHLCV extremes cannot establish within-candle order of high/low.
@@ -150,10 +161,10 @@ def main():
             "mae_pct_ohlcv_upper_bound": mae,
             **{k: v for k, v in (matching or {}).items() if k not in ("side", "trigger", "stop_loss")},
         })
-    write_csv(OUT / "xrp_trades.csv", trade_rows)
-    print(f"Diagnostic files: {OUT / 'xrp_signals.csv'} and {OUT / 'xrp_trades.csv'}")
+    write_csv(OUT / f"xrp_trades_period_{args.period}.csv", trade_rows)
+    print(f"Saved period {args.period} diagnostic CSV files in {OUT}")
     print("Note: OHLCV extremes do not reveal intrabar ordering; MFE/MAE are bounds, not tick-accurate paths.")
-    print("Compare the six entry times with the original log before drawing conclusions.")
+    print(f"Trades: {result.total_trades}; wins: {result.winning_trades}; losses: {result.losing_trades}; net PnL: {result.total_pnl:.2f}")
 
 
 if __name__ == "__main__":
