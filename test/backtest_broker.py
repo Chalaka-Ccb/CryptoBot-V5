@@ -1,3 +1,6 @@
+import argparse
+from datetime import datetime, timedelta, timezone
+
 from backtesting.data_loader import ExchangeDataLoader
 from backtesting.runner import BacktestRunner
 from backtesting.strategy_setup import (
@@ -6,15 +9,23 @@ from backtesting.strategy_setup import (
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Run one fixed 30-day XRP backtest")
+    parser.add_argument("--period", type=int, choices=(1, 2, 3), required=True,
+                        help="1=oldest, 2=middle, 3=latest")
+    args = parser.parse_args()
+    anchor = datetime(2026, 10, 24, 0, 0, tzinfo=timezone.utc)
+    start = anchor - timedelta(days=(4 - args.period) * 30)
+    end = start + timedelta(days=30)
+    print(f"PERIOD {args.period}/3: {start.isoformat()} to {end.isoformat()} (exclusive)")
+
 
     loader = ExchangeDataLoader(
         exchange_name="bybit",
         market_type="swap",
     )
 
-    market_data = loader.load_market_data(
-        symbol="XRP/USDT:USDT",
-        candles=9000,
+    market_data = loader.load_dated_5m_market_data(
+        symbol="XRP/USDT:USDT", start=start, end=end, warmup_candles=250,
     )
 
     coordinator = create_strategy_coordinator()
@@ -26,6 +37,7 @@ def main():
         default_risk_reward=3.0,
         default_stop_percentage=0.01,
         breakout_expiry_candles=3,
+        trade_start_time=start,
     )
 
     result = runner.run(
