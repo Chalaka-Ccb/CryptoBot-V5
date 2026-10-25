@@ -1,6 +1,6 @@
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from backtesting.broker import BacktestBroker
@@ -27,6 +27,7 @@ class BacktestRunner:
 
     # Number of future 5m candles allowed for breakout.
     breakout_expiry_candles: int = 3
+    trade_start_time: datetime | None = None
 
     @staticmethod
     def _convert_trade(trade) -> BacktestTrade:
@@ -378,6 +379,10 @@ class BacktestRunner:
             # -----------------------------------------
             # 7. ONE ORDER/POSITION PER SYMBOL
             # -----------------------------------------
+
+            # Warm-up candles update indicators but must never place orders.
+            if self.trade_start_time is not None and close_time <= self.trade_start_time:
+                continue
 
             if broker.has_open_trade(symbol):
                 continue
