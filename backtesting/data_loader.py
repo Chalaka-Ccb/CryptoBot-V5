@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 from backtesting.market_data import BacktestMarketData
 import ccxt
@@ -240,4 +240,46 @@ class ExchangeDataLoader:
             symbol=symbol,
             candles_15m=candles_15m,
             candles_5m=candles_5m,
+        )
+    def load_dated_5m_market_data(self, symbol, start, end, warmup_candles=250):
+        """Load [start,end) in UTC, with warm-up bars before start."""
+        if start.tzinfo is None or end.tzinfo is None:
+            raise ValueError("UTC timezone-aware dates required")
+        start = start.astimezone(timezone.utc)
+        end = end.astimezone(timezone.utc)
+        if not start < end <= datetime.now(timezone.utc):
+            raise ValueError("Invalid historical interval")
+        if end - start > timedelta(days=30):
+            raise ValueError("Maximum test interval is 30 days")
+        if warmup_candles < 200:
+            raise ValueError("EMA200 requires at least 200 warmup candles")
+        if any(dt.second or dt.microsecond or dt.minute % 5 for dt in (start, end)):
+            raise ValueError("Dates must align to 5m candle boundaries")
+        self._validate_exchange(symbol, "5m")
+        step = 300000
+        first = int(start.timestamp() * 1000) - warmup_candles * step
+        last = int(end.timestamp() * 1000)
+        raw = {}
+        since = first
+        while since < last:
+            limit = min(1000, (last - since + step - 1) // step)
+            batch = self.exchange.fetch_ohlcv(
+                symbol=symbol, timeframe="5m", since=since, limit=limit
+            )
+            if not batch:
+                raise RuntimeError(f"No candles returned from {since}")
+            for item in batch:
+                if first <= item[0] < last:
+                    raw[item[0]] = item
+            next_since = batch[-1][0] + step
+            if next_since <= since:
+                raise RuntimeError("Pagination stalled")
+            since = next_since
+        timestamps = range(first, last, step)
+        missing = next((t for t in timestamps if t not in raw), None)
+        if missing is not None:
+            raise RuntimeError(f"Missing 5m candle at {missing}")
+        return BacktestMarketData(
+            symbol=symbol, candles_15m=[],
+            candles_5m=self._convert_candles([raw[t] for t in timestamps])
         )
