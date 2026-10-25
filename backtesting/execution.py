@@ -343,11 +343,11 @@ class BacktestExecution:
         self.sync_account()
         return trade
 
-    def execute_current_close(self, pending, candle):
+    def execute_current_close(self, pending, candle, execution_minutes=5):
         if pending.signal.entry_timing != EntryTiming.CURRENT_CLOSE:
             return None
         return self.execute_entry(pending, candle.close,
-                                  candle.timestamp + timedelta(minutes=5))
+                                  candle.timestamp + timedelta(minutes=execution_minutes))
 
     def execute_next_open(self, pending, candle):
         if pending.signal.entry_timing != EntryTiming.NEXT_OPEN:
@@ -373,3 +373,23 @@ class BacktestExecution:
         else:
             return None
         return self.execute_entry(pending, entry, candle.timestamp)
+
+    def execute_limit(self, pending, candle):
+        """Conservative resting-limit fill; no fills on signal candle."""
+        signal = pending.signal
+        if signal.entry_timing != EntryTiming.LIMIT or signal.trigger_price is None:
+            return None
+        price = signal.trigger_price
+        if price <= 0:
+            return None
+        if signal.side == SignalSide.LONG:
+            if candle.low > price:
+                return None
+            fill = min(candle.open, price)
+        elif signal.side == SignalSide.SHORT:
+            if candle.high < price:
+                return None
+            fill = max(candle.open, price)
+        else:
+            return None
+        return self.execute_entry(pending, fill, candle.timestamp)

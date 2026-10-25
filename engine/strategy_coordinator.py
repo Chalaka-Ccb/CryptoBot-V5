@@ -18,14 +18,17 @@ class StrategyCoordinator:
         self,
         strategies_15m: list,
         strategies_5m: list,
+        strategies_1m: list | None = None,
     ):
         self.strategies_15m = strategies_15m
         self.strategies_5m = strategies_5m
+        self.strategies_1m = strategies_1m or []
 
     def evaluate(
         self,
         candles_15m: list[Candle],
         candles_5m: list[Candle],
+        candles_1m: list[Candle] | None = None,
     ) -> StrategyEvaluation:
 
         # -------------------------------------------------
@@ -57,6 +60,12 @@ class StrategyCoordinator:
                 timeframe="5m",
                 signal=signal,
             )
+
+        signal = self._evaluate_strategies(
+            strategies=self.strategies_1m, candles=candles_1m or [],
+        )
+        if signal is not None:
+            return StrategyEvaluation(timeframe="1m", signal=signal)
 
         return StrategyEvaluation(
             timeframe="none",

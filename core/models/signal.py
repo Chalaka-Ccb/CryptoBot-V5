@@ -12,6 +12,7 @@ class EntryTiming(str, Enum):
     CURRENT_CLOSE = "current_close"
     NEXT_OPEN = "next_open"
     BREAKOUT = "breakout"
+    LIMIT = "limit"
 
 
 @dataclass(frozen=True)

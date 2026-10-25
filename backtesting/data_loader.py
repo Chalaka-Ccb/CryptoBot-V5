@@ -222,6 +222,7 @@ class ExchangeDataLoader:
             self,
             symbol: str,
             candles: int = 2500,
+            include_1m: bool = False,
     ) -> BacktestMarketData:
 
         candles_15m = self.load_historical_candles(
@@ -236,8 +237,13 @@ class ExchangeDataLoader:
             candles=candles * 3,
         )
 
+        candles_1m = (self.load_historical_candles(
+            symbol=symbol, timeframe="1m", candles=candles * 15,
+        ) if include_1m else None)
+
         return BacktestMarketData(
             symbol=symbol,
             candles_15m=candles_15m,
             candles_5m=candles_5m,
+            candles_1m=candles_1m,
         )
