@@ -14,6 +14,7 @@ from core.enums.trade import ExitReason
 from core.models.account import Account
 from core.models.candle import Candle
 from engine.risk_manager import RiskManager
+from risk.limits import RiskLimits
 from backtesting.execution import BacktestExecution
 from strategies.tema_adx_cmo import TemaAdxCmoStrategy
 
@@ -104,7 +105,8 @@ def run(args):
     broker = BacktestBroker(balance=args.capital)
     account = Account(account_id="PORTFOLIO", currency="USDT",
                       initial_balance=args.capital, balance=args.capital)
-    risk = RiskManager(account, risk_percentage=args.risk, default_risk_reward=3.0)
+    risk = RiskManager(account, risk_percentage=args.risk, default_risk_reward=3.0,
+                       limits=RiskLimits(leverage=args.leverage))
     execution = BacktestExecution(broker, risk)
     histories = defaultdict(list)
     signal_histories = defaultdict(list)
@@ -192,9 +194,10 @@ def main():
     parser.add_argument("--symbols", type=int, default=15)
     parser.add_argument("--max-price", type=float, default=15.0)
     parser.add_argument("--capital", type=float, default=10000.0)
-    parser.add_argument("--risk", type=float, default=0.02)
+    parser.add_argument("--risk", type=float, default=0.10)
+    parser.add_argument("--leverage", type=float, default=15.0)
     args = parser.parse_args()
-    if args.candles < 100 or args.symbols < 1 or args.capital <= 0 or not 0 < args.risk <= 1:
+    if args.candles < 100 or args.symbols < 1 or args.capital <= 0 or not 0 < args.risk <= 1 or args.leverage < 1:
         parser.error("Invalid candles, symbols, capital, or risk")
     if args.rr is not None and not 0 < args.rr <= 20:
         parser.error("--rr must be > 0 and <= 20")
