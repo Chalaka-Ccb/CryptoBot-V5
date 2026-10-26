@@ -191,7 +191,7 @@ def main():
     parser.add_argument("--timeframe", choices=["5m", "15m", "30m", "1h"], default="15m")
     parser.add_argument("--rr", type=float, default=None)
     parser.add_argument("--candles", type=int, default=1000, help="15m-equivalent candle count")
-    parser.add_argument("--symbols", type=int, default=15)
+    parser.add_argument("--symbols", type=int, default=25)
     parser.add_argument("--max-price", type=float, default=15.0)
     parser.add_argument("--capital", type=float, default=10000.0)
     parser.add_argument("--risk", type=float, default=0.10)
