@@ -45,7 +45,7 @@ def select_symbols(exchange, count=15, max_price=15.0):
     eligible.sort(key=lambda row: (-row[0], row[1]))
     if len(eligible) < count:
         raise ValueError(f"Only {len(eligible)} eligible symbols found; requested {count}")
-    return eligible[:count]
+    return eligible
 
 
 def aggregate(five_minute, minutes):
@@ -72,30 +72,52 @@ def aggregate(five_minute, minutes):
 
 def run(args):
     loader = ExchangeDataLoader(exchange_name="bybit", market_type="swap")
-    chosen = select_symbols(loader.exchange, args.symbols, args.max_price)
-    print("\nSelected symbols (CURRENT snapshot; not historical price filter):")
-    for _, symbol, price in chosen:
-        print(f"  {symbol}: {price:.6f} USDT")
-
-    # Fetch once per symbol. Align every market to the SAME 5m timestamps.
+    candidates = select_symbols(loader.exchange, args.symbols, args.max_price)
+    print(f"Found {len(candidates)} currently eligible pairs; seeking {args.symbols} with aligned history")
+    required = args.candles * 3
+    # Fix the reference window using the first viable liquid market.
+    # All selected symbols must cover this SAME window without gaps.
     by_symbol = {}
-    for _, symbol, _ in chosen:
-        print(f"Loading {symbol}...")
-        data = loader.load_historical_candles(symbol, "5m", args.candles * 3)
-        if len(data) < 100:
-            raise ValueError(f"Not enough history for {symbol}")
-        by_symbol[symbol] = {c.timestamp: c for c in data}
-    common = set.intersection(*(set(d) for d in by_symbol.values()))
-    if not common:
-        raise ValueError("No common timestamps across all symbols")
-    # Require one contiguous aligned interval; no accidental gap bridging.
-    end = max(common)
-    start = end
-    while start - timedelta(minutes=5) in common:
-        start -= timedelta(minutes=5)
-    timestamps = sorted(t for t in common if start <= t <= end)
-    if len(timestamps) < 100:
-        raise ValueError("Common contiguous history too short; reduce --candles or change symbols")
+    chosen = []
+    reference = None
+    for _, symbol, price in candidates:
+        if len(chosen) >= args.symbols:
+            break
+        print(f"Checking history: {symbol}...")
+        try:
+            data = loader.load_historical_candles(symbol, "5m", required + 2)
+        except Exception as error:
+            print(f"  SKIP {symbol}: history fetch failed: {error}")
+            continue
+        available = {c.timestamp: c for c in data}
+        if reference is None:
+            ordered = sorted(available)
+            if len(ordered) < required:
+                print(f"  SKIP {symbol}: only {len(ordered)} candles, need {required}")
+                continue
+            # Use the newest contiguous run of the requested length.
+            run_end = ordered[-1]
+            window = [run_end - timedelta(minutes=5 * i) for i in range(required - 1, -1, -1)]
+            if not all(t in available for t in window):
+                print(f"  SKIP {symbol}: gaps in the reference window")
+                continue
+            reference = window
+        if not all(t in available for t in reference):
+            missing = sum(t not in available for t in reference)
+            print(f"  SKIP {symbol}: missing {missing} candles in common window")
+            continue
+        by_symbol[symbol] = {t: available[t] for t in reference}
+        chosen.append((symbol, price))
+        print(f"  ACCEPT ({len(chosen)}/{args.symbols})")
+    if len(chosen) < args.symbols:
+        raise ValueError(
+            f"Only {len(chosen)} of {args.symbols} eligible pairs have complete "
+            "history in the same window. Reduce --symbols or --candles."
+        )
+    timestamps = reference
+    print("\nSelected pairs (current prices, not historical eligibility):")
+    for symbol, price in chosen:
+        print(f"  {symbol}: {price:.6f} USDT")
     print(f"Shared window: {timestamps[0]} through {timestamps[-1]} ({len(timestamps)} 5m candles)")
 
     strategy = TemaAdxCmoStrategy(
